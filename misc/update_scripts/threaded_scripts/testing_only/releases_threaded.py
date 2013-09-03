@@ -17,7 +17,7 @@ import lib.info as info
 import signal
 import datetime
 
-threads = 5
+threads = 1
 print("\nUpdate Releases Threaded Started at %s" % (datetime.datetime.now().strftime("%H:%M:%S")))
 
 start_time = time.time()
@@ -89,9 +89,10 @@ def main():
 
 	my_queue.join()
 
-	#close connection to mysql
-	cur.close()
-	con.close()
+	#stage7b
+	final = "Stage7b"
+	subprocess.call(["php", pathname+"/../../nix_scripts/tmux/bin/update_releases.php", ""+str(final)])
+
 	print("\nUpdate Releases Threaded Completed at %s" % (datetime.datetime.now().strftime("%H:%M:%S")))
 	print("Running time: %s" % (str(datetime.timedelta(seconds=time.time() - start_time))))
 

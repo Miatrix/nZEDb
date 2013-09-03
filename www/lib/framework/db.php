@@ -78,21 +78,19 @@ class DB
 				return $r['id'];
 			}
 		} catch (PDOException $e) {
-			//deadlock, try 5 time
+			//deadlock or lock wait timeout, try 10 times
 			$i = 1;
-			while ( $e->errorInfo[1]==1213 || $e->errorInfo[0]==40001 || $i <= 5)
+			while (($e->errorInfo[1]==1213 || $e->errorInfo[0]==40001 || $e->errorInfo[0]==1205) && $i <= 10)
 			{
-				sleep(1);
-				try {
-					$run = DB::$pdo->prepare($query);
-					$run->execute();
-					return $run;
-				} catch (PDOException $e) {
-					//return false;
-				}
+				sleep($i * $i);
+				$ins = DB::$pdo->prepare($query);
+				$ins->execute();
+				return DB::$pdo->lastInsertId();
 				$i++;
 			}
-			printf($e);
+			//printf($e);
+			if ($e->errorInfo[1]==1062 || $e->errorInfo[1]==23000)
+				echo "\nError: Insert would create duplicate row, skipping\n";
 			return false;
 		}
 	}
@@ -108,21 +106,18 @@ class DB
 			$run->execute();
 			return $run;
 		} catch (PDOException $e) {
-			//deadlock, try 5 time
+			//deadlock or lock wait timeout, try 10 times
 			$i = 1;
-			while ( $e->errorInfo[1]==1213 || $e->errorInfo[0]==40001 || $i <= 5)
+			while (($e->errorInfo[1]==1213 || $e->errorInfo[0]==40001 || $e->errorInfo[0]==1205) && $i <= 10)
 			{
-				sleep(1);
-				try {
-					$run = DB::$pdo->prepare($query);
-					$run->execute();
-					return $run;
-				} catch (PDOException $e) {
-					//printf($e);
-				}
+				$run = DB::$pdo->prepare($query);
+				$run->execute();
+				return $run;
 				$i++;
 			}
-			printf($e);
+			//printf($e);
+			if ($e->errorInfo[1]==1062 || $e->errorInfo[1]==23000)
+				echo "\nError: Update would create duplicate row, skipping\n";
 			return false;
 		}
 	}
