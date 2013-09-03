@@ -1,9 +1,9 @@
 <?php
 
-require_once(WWW_DIR."/lib/framework/db.php");
-require_once(WWW_DIR."/lib/category.php");
-require_once(WWW_DIR."/lib/groups.php");
-require_once(WWW_DIR."/lib/namecleaning.php");
+require_once(WWW_DIR."lib/framework/db.php");
+require_once(WWW_DIR."lib/category.php");
+require_once(WWW_DIR."lib/groups.php");
+require_once(WWW_DIR."lib/namecleaning.php");
 
 /* Values of relnamestatus:
  * 0  : New release, just inserted into the table.
@@ -19,7 +19,7 @@ require_once(WWW_DIR."/lib/namecleaning.php");
  * 10 : Fixed with namefixer preDB.
  * 11 : Fixed with predb.php
  * 12 : Fixed with requestID.
- * 20 : The release was checked by namefixer but no name was found.
+ * 20 : The release was checked by namefixer but no name was found
  */
 
 class Namefixer
@@ -71,11 +71,21 @@ class Namefixer
 		{
 			foreach ($relres as $relrow)
 			{
-				$this->done = $this->matched = false;
-				$this->checkName($relrow, $echo, $type, $namestatus);
-				$this->checked++;
-				if ($this->checked % 500 == 0)
-					echo $this->checked." NFOs processed.\n\n";
+				//ignore encrypted nfos
+				if (preg_match('/^=newz\[NZB\]=\w+/', $relrow['nfo']))
+				{
+					$fail = $db->prepare(sprintf("UPDATE releases SET relnamestatus = 20 WHERE id = %d", $relrow['id']));
+					$fail->execute();
+					$this->checked++;
+				}
+				else
+				{
+					$this->done = $this->matched = false;
+					$this->checkName($relrow, $echo, $type, $namestatus);
+					$this->checked++;
+					if ($this->checked % 500 == 0)
+						echo $this->checked." NFOs processed.\n\n";
+				}
 			}
 			if($echo == 1)
 				echo $this->fixed." releases have had their names changed out of: ".$this->checked." NFO's.\n";
@@ -161,12 +171,13 @@ class Namefixer
 
 					if ($type === "PAR2, ")
 						echo $n;
-					echo	$n."New name: ".$newname.$n.
-							"Old name: ".$release["searchname"].$n.
-							"New cat:  ".$newcatname.$n.
-							"Old cat:  ".$oldcatname.$n.
-							"Group:    ".$groupname.$n.
-							"Method:   ".$type.$method.$n;
+					echo	$n."New name:  ".$newname.$n.
+							"Old name:  ".$release["searchname"].$n.
+							"New cat:   ".$newcatname.$n.
+							"Old cat:   ".$oldcatname.$n.
+							"Group:     ".$groupname.$n.
+							"Method:    ".$type.$method.$n.
+							"ReleaseID: ". $release["releaseid"].$n;
 					if ($type !== "PAR2, ")
 						echo $n;
 				}
@@ -182,7 +193,7 @@ class Namefixer
 							$status = 7;
 						else if ($type == "Filenames, ")
 							$status = 9;
-						$db->queryExec(sprintf("UPDATE releases SET searchname = %s, relnamestatus = %d, categoryid = %d WHERE id = %d", $db->escapeString($newname), $status, $determinedcat, $release["releaseid"]));
+						$db->queryExec(sprintf("UPDATE releases SET searchname = %s, relnamestatus = %d, categoryid = %d WHERE id = %d", $db->escapeString(substr($newname, 0, 255)), $status, $determinedcat, $release["releaseid"]));
 					}
 					else
 					{
@@ -198,7 +209,9 @@ class Namefixer
 	public function matchPredbMD5($md5, $release, $echo, $namestatus, $echooutput)
 	{
 		$db = new DB();
-		$matched = 0;
+		$matching = 0;
+		$category = new Category();
+		$this->matched = false;
 		$n = "\n";
 		$res = $db->query(sprintf("SELECT title, source FROM predb WHERE md5 = %s", $db->escapeString($md5)));
 		if (count($res) > 0)
@@ -207,31 +220,39 @@ class Namefixer
 			{
 				if ($row["title"] !== $release["searchname"])
 				{
-					$category = new Category();
 					$determinedcat = $category->determineCategory($row["title"], $release["groupid"]);
 
 					if ($echo == 1)
 					{
+						$this->matched = true;
 						if ($namestatus == 1)
-							$db->prepare(sprintf("UPDATE releases SET searchname = %s, categoryid = %d, relnamestatus = 10 WHERE id = %d", $db->escapeString($row["title"]), $determinedcat, $release["id"]));
+							$db->queryExec(sprintf("UPDATE releases SET searchname = %s, categoryid = %d, relnamestatus = 10, dehashstatus = 1 WHERE id = %d", $db->escapeString($row["title"]), $determinedcat, $release["id"]));
 						else
-							$db->prepare(sprintf("UPDATE releases SET searchname = %s, categoryid = %d WHERE id = %d", $db->escapeString($row["title"]), $determinedcat, $release["id"]));
+							$db->queryExec(sprintf("UPDATE releases SET searchname = %s, categoryid = %d, dehashstatus = 1 WHERE id = %d", $db->escapeString($row["title"]), $determinedcat, $release["id"]));
 					}
+
 					if ($echooutput)
 					{
 						$groups = new Groups();
-						echo $n."New name: ".$row["title"].$n.
-							"Old name: ".$release["searchname"].$n.
-							"New cat:  ".$category->getNameByID($determinedcat).$n.
-							"Old cat:  ".$category->getNameByID($release["categoryid"]).$n.
-							"Group:    ".$groups->getByNameByID($release["groupid"]).$n.
-							"Method:   "."predb md5 release name: ".$row["source"].$n.$n;
+						echo $n."New name:  ".$row["title"].$n.
+							"Old name:  ".$release["searchname"].$n.
+							"New cat:   ".$category->getNameByID($determinedcat).$n.
+							"Old cat:   ".$category->getNameByID($release["categoryid"]).$n.
+							"Group:     ".$groups->getByNameByID($release["groupid"]).$n.
+							"Method:    "."predb md5 release name: ".$row["source"].$n.
+							"ReleaseID: ". $release["id"].$n.$n;
 					}
-					$matched++;
+					$matching++;
 				}
+			if ($namestatus == 1 && $this->matched === false)
+			{
+				$fail = $db->prepare(sprintf("UPDATE releases SET dehashstatus = dehashstatus - 1 WHERE id = %d", $row['id']));
+				$fail->execute();
+			}
+				
 			}
 		}
-		return $matched;
+		return $matching;
 	}
 
 	//  Check the array using regex for a clean name.
@@ -259,10 +280,16 @@ class Namefixer
 			}
 		}
 		// The release didn't match so set relnamestatus to 20 so it doesn't get rechecked. Also allows removeCrapReleases to run extra things on the release.
-		if ($namestatus == 1 && $this->matched === false)
+		if ($namestatus == 1 && $this->matched === false && $type == "NFO, ")
 		{
-			$db = new Db;
-			$db->queryExec(sprintf("UPDATE releases SET relnamestatus = 20 WHERE id = %d", $release['releaseid']));
+			$db = new DB();
+			$db->queryExec(sprintf("UPDATE releases SET relnamestatus = 20 WHERE id = %d", $release["releaseid"]));
+		}
+		// The release didn't match so set relnamestatus to 21 so it doesn't get rechecked. Also allows removeCrapReleases to run extra things on the release.
+		if ($namestatus == 1 && $this->matched === false && $type == "Filenames, ")
+		{
+			$db = new DB();
+			$db->queryExec(sprintf("UPDATE releases SET relnamestatus = 21 WHERE id = %d", $release["releaseid"]));
 		}
 	}
 
