@@ -82,6 +82,7 @@ audiostatus TINYINT(1) NOT NULL DEFAULT 0,
 dehashstatus TINYINT(1) NOT NULL DEFAULT 0,
 reqidstatus TINYINT(1) NOT NULL DEFAULT '0',
 nzb_guid VARCHAR(50) NULL,
+hashed BOOL DEFAULT FALSE,
 PRIMARY KEY  (id)
 ) ENGINE=MYISAM DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci AUTO_INCREMENT=1 ;
 
@@ -93,7 +94,7 @@ CREATE INDEX ix_releases_imdbid ON releases (imdbid);
 CREATE INDEX ix_releases_preid ON releases (preid);
 CREATE INDEX ix_releases_guid ON releases (guid);
 CREATE INDEX ix_releases_nzbstatus ON releases(nzbstatus);
-CREATE INDEX ix_release_name ON releases(name);
+CREATE INDEX ix_releases_name ON releases(name);
 CREATE INDEX ix_releases_searchname ON releases(searchname);
 CREATE INDEX ix_releases_groupid ON releases(groupid);
 CREATE INDEX ix_releases_relnamestatus on releases(relnamestatus);
@@ -105,6 +106,14 @@ CREATE INDEX ix_releases_musicinfoid ON releases (musicinfoid);
 CREATE INDEX ix_releases_consoleinfoid ON releases (consoleinfoid);
 CREATE INDEX ix_releases_bookinfoid ON releases (bookinfoid);
 CREATE INDEX ix_releases_haspreview ON releases (haspreview ASC) USING HASH;
+CREATE INDEX ix_releases_hashed on releases(hashed);
+
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER check_insert BEFORE INSERT ON releases FOR EACH ROW BEGIN IF NEW.name REGEXP '^\\[[[:digit:]]+\\]' = 0 THEN SET NEW.reqidstatus = -1; ELSEIF NEW.searchname REGEXP '[a-fA-F0-9]{32}' OR NEW.name REGEXP '[a-fA-F0-9]{32}' THEN SET NEW.hashed = true; END IF; END */;;
+DELIMITER ;
+DELIMITER ;;
+/*!50003 CREATE*/ /*!50017 DEFINER=`root`@`localhost`*/ /*!50003 TRIGGER check_update BEFORE UPDATE ON releases FOR EACH ROW BEGIN IF NEW.name REGEXP '^\\[[[:digit:]]+\\]' = 0 THEN SET NEW.reqidstatus = -1; ELSEIF NEW.searchname REGEXP '[a-fA-F0-9]{32}' OR NEW.name REGEXP '[a-fA-F0-9]{32}' THEN SET NEW.hashed = true; END IF; END */;;
+DELIMITER ;
 
 DROP TABLE IF EXISTS releasefiles;
 CREATE TABLE releasefiles (
@@ -1058,7 +1067,8 @@ INSERT INTO site
 	('delaytime', '2'),
 	('addpar2', '0'),
 	('fixnamethreads', '1'),
-	('sqlpatch','118');
+	('fixnamesperrun', '10'),
+	('sqlpatch','124');
 
 
 DROP TABLE IF EXISTS logging;
@@ -1321,7 +1331,7 @@ INSERT INTO tmux (setting, value) values ('DEFRAG_CACHE','900'),
 	('MONITOR_DELAY','30'),
 	('TMUX_SESSION','nZEDb'),
 	('NICENESS','19'),
-	('BINARIES','FALSE'),
+	('BINARIES','0'),
 	('BACKFILL','0'),
 	('IMPORT','0'),
 	('NZBS','/path/to/nzbs'),
@@ -1380,7 +1390,8 @@ INSERT INTO tmux (setting, value) values ('DEFRAG_CACHE','900'),
 	('COLORS_END', '250'),
 	('COLORS_EXC', '4, 8, 9, 11, 15, 16, 17, 18, 19, 46, 47, 48, 49, 50, 51, 52, 53, 59, 60'),
 	('MONITOR_PATH_A', NULL),
-	('MONITOR_PATH_B', NULL);
+	('MONITOR_PATH_B', NULL),
+	('COLORS', 'FALSE');
 
 DROP TABLE IF EXISTS nzbs;
 CREATE TABLE nzbs (
@@ -1399,7 +1410,7 @@ CREATE TABLE nzbs (
 
 CREATE INDEX ix_nzbs_partnumber ON nzbs(partnumber);
 CREATE INDEX ix_nzbs_collectionhash ON nzbs(collectionhash);
-
+CREATE UNIQUE INDEX ix_nzbs_message ON nzbs(message_id);
 
 INSERT INTO tvrage (id, rageid, releasetitle, description, createddate, imgdata, tvdbid)
 VALUES

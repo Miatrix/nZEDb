@@ -37,13 +37,13 @@ class Releases
 		$this->echooutput = $echooutput;
 		$s = new Sites();
 		$this->site = $s->get();
-		$this->stage5limit = (!empty($this->site->maxnzbsprocessed)) ? $this->site->maxnzbsprocessed : 1000;
-		$this->completion = (!empty($this->site->releasecompletion)) ? $this->site->releasecompletion : 0;
-		$this->crosspostt = (!empty($this->site->crossposttime)) ? $this->site->crossposttime : 2;
+		$this->stage5limit = (isset($this->site->maxnzbsprocessed)) ? $this->site->maxnzbsprocessed : 1000;
+		$this->completion = (isset($this->site->releasecompletion)) ? $this->site->releasecompletion : 0;
+		$this->crosspostt = (isset($this->site->crossposttime)) ? $this->site->crossposttime : 2;
 		$this->updategrabs = ($this->site->grabstatus == "0") ? false : true;
 		$this->requestids = $this->site->lookup_reqids;
-		$this->hashcheck = (!empty($this->site->hashcheck)) ? $this->site->hashcheck : 0;
-		$this->delaytimet = (!empty($this->site->delaytime)) ? $this->site->delaytime : 2;
+		$this->hashcheck = (isset($this->site->hashcheck)) ? $this->site->hashcheck : 0;
+		$this->delaytimet = (isset($this->site->delaytime)) ? $this->site->delaytime : 2;
 		$this->debug = ($this->site->debuginfo == "0") ? false : true;
 	}
 
@@ -679,7 +679,7 @@ class Releases
 		$searchsql = $this->searchSQL($name, $db, "searchname");
 		$catsrch = $this->categorySQL($cat);
 
-		$maxage = ($maxage > 0) ? sprintf(" AND postdate > now() - INTERVAL %d DAY ", $maxage) : '';
+		$maxage = ($maxage > 0) ? sprintf(" AND releases.postdate > now() - INTERVAL %d DAY ", $maxage) : '';
 
 		$sql = sprintf("SELECT releases.*, CONCAT(cp.title, ' > ', c.title) AS category_name, CONCAT(cp.id, ',', c.id) AS category_ids, groups.name AS group_name, rn.id AS nfoid FROM releases LEFT OUTER JOIN category c ON c.id = releases.categoryid LEFT OUTER JOIN groups ON groups.id = releases.groupid LEFT OUTER JOIN releasenfo rn ON rn.releaseid = releases.id and rn.nfo IS NOT NULL LEFT OUTER JOIN category cp ON cp.id = c.parentid WHERE releases.passwordstatus <= %d %s %s %s %s %s ORDER BY postdate DESC LIMIT %d OFFSET %d", $this->showPasswords(), $anidbID, $epno, $searchsql, $catsrch, $maxage, $limit, $offset);
 		$orderpos = strpos($sql, "ORDER BY");
@@ -711,7 +711,7 @@ class Releases
 		$catsrch = $this->categorySQL($cat);
 
 		if ($maxage > 0)
-			$maxage = sprintf(" AND postdate > NOW() - INTERVAL %d DAY ", $maxage);
+			$maxage = sprintf(" AND releases.postdate > NOW() - INTERVAL %d DAY ", $maxage);
 		else
 			$maxage = "";
 
@@ -884,7 +884,6 @@ class Releases
 		$cat = new Category();
 		$consoletools = new consoleTools();
 		$relcount = 0;
-
 		$resrel = $db->query("SELECT id, ".$type.", groupid FROM releases ".$where);
 		$total = count($resrel);
 		if (count($resrel) > 0)
@@ -894,11 +893,11 @@ class Releases
 				$catId = $cat->determineCategory($rowrel[$type], $rowrel['groupid']);
 				$db->queryExec(sprintf("UPDATE releases SET categoryid = %d, relnamestatus = 1 WHERE id = %d", $catId, $rowrel['id']));
 				$relcount ++;
-				if ($this->echooutput)
+				if ($echooutput)
 					$consoletools->overWrite("Categorizing:".$consoletools->percentString($relcount,$total));
 			}
 		}
-		if ($this->echooutput !== false && $relcount > 0)
+		if ($echooutput !== false && $relcount > 0)
 			echo "\n";
 		return $relcount;
 	}
@@ -1111,34 +1110,48 @@ class Releases
 			$namecleaning = new nameCleaning();
 			$predb = new  Predb();
 			$page = new Page();
+			$cleanName = $propername = "";
 
 			foreach ($rescol as $rowcol)
 			{
 				$cleanArr = array('#', '@', '$', '%', '^', '§', '¨', '©', 'Ö');
 				$cleanRelName = str_replace($cleanArr, '', $rowcol['subject']);
 				$cleanerName = $namecleaning->releaseCleaner($rowcol['subject'], $rowcol['groupid']);
+				if (!is_array($cleanerName))
+					$cleanName = $cleanerName;
+				else
+				{
+					$cleanName = $cleanerName['cleansubject'];
+					$propername = $cleanerName['properlynamed'];
+				}
 				$relguid = sha1(uniqid().mt_rand());
 				try {
-					$relid = $db->queryInsert(sprintf("INSERT INTO releases (name, searchname, totalpart, groupid, adddate, guid, rageid, postdate, fromname, size, passwordstatus, haspreview, categoryid, nfostatus) VALUES (%s, %s, %d, %d, NOW(), %s, -1, %s, %s, %s, %d, -1, 7010, -1)", $db->escapeString($cleanRelName), $db->escapeString($cleanerName), $rowcol['totalfiles'], $rowcol['groupid'], $db->escapeString($relguid), $db->escapeString($rowcol['date']), $db->escapeString($rowcol['fromname']), $db->escapeString($rowcol['filesize']), ($page->site->checkpasswordedrar == "1" ? -1 : 0)));
+					if ($propername === true)
+						$relid = $db->queryInsert(sprintf("INSERT INTO releases (name, searchname, totalpart, groupid, adddate, guid, rageid, postdate, fromname, size, passwordstatus, haspreview, categoryid, nfostatus, relnamestatus) VALUES (%s, %s, %d, %d, NOW(), %s, -1, %s, %s, %s, %d, -1, 7010, -1, 6)", $db->escapeString($cleanRelName), $db->escapeString($cleanName), $rowcol['totalfiles'], $rowcol['groupid'], $db->escapeString($relguid), $db->escapeString($rowcol['date']), $db->escapeString($rowcol['fromname']), $db->escapeString($rowcol['filesize']), ($page->site->checkpasswordedrar == "1" ? -1 : 0)));
+					else
+						$relid = $db->queryInsert(sprintf("INSERT INTO releases (name, searchname, totalpart, groupid, adddate, guid, rageid, postdate, fromname, size, passwordstatus, haspreview, categoryid, nfostatus) VALUES (%s, %s, %d, %d, NOW(), %s, -1, %s, %s, %s, %d, -1, 7010, -1)", $db->escapeString($cleanRelName), $db->escapeString($cleanName), $rowcol['totalfiles'], $rowcol['groupid'], $db->escapeString($relguid), $db->escapeString($rowcol['date']), $db->escapeString($rowcol['fromname']), $db->escapeString($rowcol['filesize']), ($page->site->checkpasswordedrar == "1" ? -1 : 0)));
 				} catch (PDOException $err) {
+					// Mark dupes filecheck = 5, so they will be deleted
+					if ($e->errorInfo[1]==1062 || $e->errorInfo[1]==23000)
+						$db->queryExec(sprintf("UPDATE collections SET filecheck = 5 WHERE collectionhash = %s", $rowcol['collectionhash']));
 					if ($this->echooutput)
 						echo "\033[01;31m.".$err."\n";
 				}
-				if (!isset($error))
+				if (!isset($err) && isset($relid) && $relid != "")
 				{
 					$predb->matchPre($cleanRelName, $relid);
 					// Update collections table to say we inserted the release.
 					$db->queryExec(sprintf("UPDATE collections SET filecheck = 4, releaseid = %d WHERE id = %d", $relid, $rowcol['id']));
 					$retcount ++;
 					if ($this->echooutput)
-						echo "Added release ".$cleanerName."\n";
+						echo "Added release ".$cleanName."\n";
 				}
 			}
 		}
 
-		//if ($this->echooutput)
-		//	echo $retcount." Releases added in ".$consoletools->convertTime(TIME() - $stage4).".";
-		//return $retcount;
+		if ($this->echooutput)
+			echo $retcount." Releases added in ".$consoletools->convertTime(TIME() - $stage4).".";
+		return $retcount;
 	}
 
 	/*
@@ -1186,7 +1199,7 @@ class Releases
 				$maxfilesizeres = $db->queryOneRow("SELECT value FROM site WHERE setting = 'maxsizetoformrelease'");
 				if ($maxfilesizeres['value'] != 0)
 				{
-					$resrel = $db->query(sprintf("SELECT id, guid FROM releases WHERE groupid = %d AND filesize > %d", $groupID['id'], $maxfilesizeres['value']));
+					$resrel = $db->query(sprintf("SELECT id, guid FROM releases WHERE groupid = %d AND size > %d", $groupID['id'], $maxfilesizeres['value']));
 					if (count($resrel) > 0)
 					{
 						foreach ($resrel as $rowrel)
@@ -1271,7 +1284,7 @@ class Releases
 		if ($this->echooutput)
 			echo "\n\033[1;33mStage 5 -> Create the NZB, mark collections as ready for deletion.\033[0m\n";
 		$stage5 = TIME();
-		$resrel = $db->query("SELECT id, guid, name, categoryid FROM releases WHERE nzbstatus = 0 ".$where." LIMIT ".$this->stage5limit);
+		$resrel = $db->query("SELECT id, guid, name, categoryid FROM releases WHERE nzbstatus = 0 ".$where);
 		$total = count($resrel);
 		if (count($resrel) > 0)
 		{
@@ -1304,9 +1317,12 @@ class Releases
 		{
 			$db = new DB();
 			$consoletools = new consoleTools();
+			$category = new Category();
+			$groups = new Groups();
 			$iFoundcnt = 0;
 			$where = (!empty($groupID)) ? " AND groupid = ".$groupID : "";
 			$stage8 = TIME();
+			$n = "\n";
 
 			if ($this->echooutput)
 				echo "\n\033[1;33mStage 5b -> Request ID lookup.\033[0m";
@@ -1323,12 +1339,13 @@ class Releases
 			}
 
 			// Mark records that don't have regex titles.
-			$db->queryExec("UPDATE releases SET reqidstatus = -1 WHERE reqidstatus = 0 AND nzbstatus = 1 AND relnamestatus = 1 AND {$regex} = 0 ".$where);
+			//$db->queryExec("UPDATE releases SET reqidstatus = -1 WHERE reqidstatus = 0 AND nzbstatus = 1 AND relnamestatus = 1 AND {$regex} = 0 ".$where);
 
 			// Look for records that potentially have regex titles.
-			$resrel = $db->query( "SELECT r.id, r.name, g.name AS groupname FROM releases r LEFT JOIN groups g ON r.groupid = g.id WHERE relnamestatus = 1 AND nzbstatus = 1 AND reqidstatus = 0 AND {$regexa} = 1 " . $where);
+			$resrel = $db->query("SELECT r.id, r.name, g.name AS groupname FROM releases r LEFT JOIN groups g ON r.groupid = g.id WHERE ( relnamestatus in (0, 1, 20, 21, 22) OR categoryid BETWEEN 7000 and 7999 ) AND nzbstatus = 1 AND reqidstatus in (0, -1) AND  {$regexa} = 1 LIMIT 100" . $where);
 			if (count($resrel) > 0)
 			{
+				echo $n;
 				$bFound = false;
 				foreach ($resrel as $rowrel)
 				{
@@ -1336,6 +1353,7 @@ class Releases
 					$requestIDtmp = explode("]", substr($rowrel['name'], 1));
 					$bFound = false;
 					$newTitle = "";
+					$updated = 0;
 
 					if (count($requestIDtmp) >= 1)
 					{
@@ -1349,18 +1367,33 @@ class Releases
 								$iFoundcnt++;
 							}
 						}
+						else
+						{
+							$db->queryExec("UPDATE releases SET reqidstatus = -2 WHERE id = " . trim($pieces[0],"'"));
+							echo ".";
+						}
 					}
-
 					if ($bFound)
 					{
-						$db->queryExec("UPDATE releases SET reqidstatus = 1, relnamestatus = 12, searchname = ".$db->escapeString($newTitle)." WHERE id = ".$rowrel['id']);
-
+						$groupname = $groups->getByNameByID($rowrel['groupname']);
+						$determinedcat = $category->determineCategory($newTitle, $groupname);
+						$run = $db->prepare(sprintf("UPDATE releases set reqidstatus = 1, relnamestatus = 12, searchname = %s, categoryid = %d where id = %d", $db->escapeString($newTitle), $determinedcat, $rowrel['id']));
+						$run->execute();
+						$newcatname = $category->getNameByID($determinedcat);
 						if ($this->echooutput)
-							echo "\nUpdated requestID ".$requestID." to release name: ".$newTitle;
+						{
+							echo	$n.$n."New name:  ".$newTitle.$n.
+								"Old name:  ".$rowrel['name'].$n.
+								"New cat:   ".$newcatname.$n.
+								"Group:     ".$rowrel['groupname'].$n.
+								"Method:    "."requestID".$n.
+								"ReleaseID: ". $rowrel['id'].$n;
+						}
+						$updated++;
 					}
 					else
 					{
-						$db->queryExec("UPDATE releases SET reqidstatus = -2, relnamestatus = 12 WHERE id = " . $rowrel['id']);
+						$db->queryExec("UPDATE releases SET reqidstatus = -2 WHERE id = " . $rowrel['id']);
 						if ($this->echooutput)
 							echo ".";
 					}
@@ -1370,7 +1403,7 @@ class Releases
 			}
 
 			if ($this->echooutput)
-				echo $iFoundcnt." Releases updated in ".$consoletools->convertTime(TIME() - $stage8).".";
+				echo $n.$iFoundcnt." Releases updated in ".$consoletools->convertTime(TIME() - $stage8).".";
 		}
 	}
 
@@ -1440,7 +1473,7 @@ class Releases
 			}
 		}
 		if ($this->echooutput)
-				echo "Removed ".$reccount." parts/binaries/collection rows in ".$consoletools->convertTime(TIME() - $stage7).".";
+				echo "Removed ".$reccount." parts/binaries/collection rows in ".$consoletools->convertTime(TIME() - $stage7);
 	}
 
 	public function processReleasesStage7b($groupID, $echooutput=false)
@@ -1450,7 +1483,7 @@ class Releases
 		$category = new Category();
 		$genres = new Genres();
 		$consoletools = new ConsoleTools();
-		$remcount = $passcount = $passcount = $dupecount = $relsizecount = $completioncount = $disabledcount = $disabledgenrecount = $miscothercount = 0;
+		$remcount = $passcount = $passcount = $dupecount = $relsizecount = $completioncount = $disabledcount = $disabledgenrecount = $miscothercount = $total = 0;
 
 		$where = (!empty($groupID)) ? " AND collections.groupid = ".$groupID : "";
 
@@ -1460,6 +1493,7 @@ class Releases
 		$stage7 = TIME();
 
 		// Old collections that were missed somehow.
+		$timer1 = TIME();
 		if ($db->dbSystem() == "mysql")
 		{
 			$delq = $db->prepare(sprintf("DELETE collections, binaries, parts FROM collections INNER JOIN binaries ON collections.id = binaries.collectionid INNER JOIN parts on binaries.id = parts.binaryid WHERE collections.dateadded < (NOW() - INTERVAL %d HOUR) ".$where, $page->site->partretentionhours));
@@ -1479,8 +1513,10 @@ class Releases
 			}
 			$reccount += $db->queryExec(sprintf("DELETE FROM collections dateadded < (NOW() - INTERVAL %d HOUR".$where, $page->site->partretentionhours));
 		}
+		echo "Query 1 took ".(TIME() - $timer1)." seconds.\n";
 
 		// Binaries/parts that somehow have no collection.
+		$timer2 = TIME();
 		if ($db->dbSystem() == "mysql")
 			$db->queryExec("DELETE binaries, parts FROM binaries LEFT JOIN parts ON binaries.id = parts.binaryid WHERE binaries.collectionid = 0 ");
 		else if ($db->dbSystem() == "pgsql")
@@ -1488,14 +1524,22 @@ class Releases
 			$db->queryExec("DELETE FROM parts WHERE EXISTS (SELECT id FROM binaries WHERE binaries.id = parts.binaryid AND binaries.collectionid = 0)");
 			$db->queryExec("DELETE FROM binaries WHERE collectionid = 0");
 		}
+		echo "Query 2 took ".(TIME() - $timer2)." seconds.\n";
 		// Parts that somehow have no binaries.
+		$timer3 = TIME();
 		$db->queryExec("DELETE FROM parts WHERE binaryid NOT IN (SELECT b.id FROM binaries b)");
+		echo "Query 3 took ".(TIME() - $timer3)." seconds.\n";
 		// Binaries that somehow have no collection.
+		$timer4 = TIME();
 		$db->queryExec("DELETE FROM binaries WHERE collectionid NOT IN (SELECT c.id FROM collections c)");
+		echo "Query 4 took ".(TIME() - $timer4)." seconds.\n";
 		// Collections that somehow have no binaries.
+		$timer5 = TIME();
 		$db->queryExec("DELETE FROM collections WHERE collections.id NOT IN (SELECT binaries.collectionid FROM binaries) ".$where);
+		echo "Query 5 took ".(TIME() - $timer5)." seconds.\n";
 
 		// Releases past retention.
+		$timer6 = TIME();
 		if($page->site->releaseretentiondays != 0)
 		{
 			$result = $db->query(sprintf("SELECT id, guid FROM releases WHERE postdate < (NOW() - INTERVAL %d DAY)", $page->site->releaseretentiondays));
@@ -1505,8 +1549,10 @@ class Releases
 				$remcount ++;
 			}
 		}
+		echo "Query 6 took ".(TIME() - $timer6)." seconds.\n";
 
 		// Passworded releases.
+		$timer7 = TIME();
 		if($page->site->deletepasswordedrelease == 1)
 		{
 			$result = $db->query("SELECT id, guid FROM releases WHERE passwordstatus = ".Releases::PASSWD_RAR);
@@ -1519,8 +1565,9 @@ class Releases
 				}
 			}
 		}
-
+		echo "Query 7 took ".(TIME() - $timer7)." seconds.\n";
 		// Possibly passworded releases.
+		$timer8 = TIME();
 		if($page->site->deletepossiblerelease == 1)
 		{
 			$result = $db->query("SELECT id, guid FROM releases WHERE passwordstatus = ".Releases::PASSWD_POTENTIAL);
@@ -1533,19 +1580,28 @@ class Releases
 				}
 			}
 		}
-
+		echo "Query 8 took ".(TIME() - $timer8)." seconds.\n";
 		// Crossposted releases.
-		$resrel = $db->query(sprintf("SELECT id, guid FROM releases WHERE adddate > (NOW() - INTERVAL %d HOUR) GROUP BY name HAVING COUNT(name) > 1", $this->crosspostt));
-		if(count($resrel) > 0)
+		$timer9 = TIME();
+		do
 		{
-			foreach ($resrel as $rowrel)
+			if ($this->crosspostt != 0)
 			{
-				$this->fastDelete($rowrel['id'], $rowrel['guid'], $this->site);
-				$dupecount ++;
+				$resrel = $db->query(sprintf("SELECT id, guid FROM releases WHERE adddate > (NOW() - INTERVAL %d HOUR) GROUP BY name HAVING COUNT(name) > 1", $this->crosspostt));
+				$total = count($resrel);
+				if(count($resrel) > 0)
+				{
+					foreach ($resrel as $rowrel)
+					{
+						$this->fastDelete($rowrel['id'], $rowrel['guid'], $this->site);
+						$dupecount ++;
+					}
+				}
 			}
-		}
-
+		} while ($total > 0);
+		echo "Query 9 took ".(TIME() - $timer9)." seconds.\n";
 		// Releases below completion %.
+		$timer10 = TIME();
 		if($this->completion > 0)
 		{
 			$resrel = $db->query(sprintf("SELECT id, guid FROM releases WHERE completion < %d AND completion > 0", $this->completion));
@@ -1558,9 +1614,10 @@ class Releases
 				}
 			}
 		}
-
+		echo "Query 10 took ".(TIME() - $timer10)." seconds.\n";
 		// Disabled categories.
 		$catlist = $category->getDisabledIDs();
+		$timer11 = TIME();
 		if (count($catlist) > 0)
 		{
 			foreach ($catlist as $cat)
@@ -1576,9 +1633,10 @@ class Releases
 				}
 			}
 		}
-
+		echo "Query 11 took ".(TIME() - $timer11)." seconds.\n";
 		// Disabled music genres.
 		$genrelist = $genres->getDisabledIDs();
+		$timer12 = TIME();
 		if (count($genrelist) > 0)
 		{
 			foreach ($genrelist as $genre)
@@ -1594,8 +1652,9 @@ class Releases
 				}
 			}
 		}
-
+		echo "Query 12 took ".(TIME() - $timer12)." seconds.\n";
 		// Misc other.
+		$timer13 = TIME();
 		if ($page->site->miscotherretentionhours > 0)
 		{
 			$resrel = $db->query(sprintf("SELECT id, guid FROM releases WHERE categoryid = %d AND adddate <= NOW() - INTERVAL %d HOUR", CATEGORY::CAT_MISC, $page->site->miscotherretentionhours));
@@ -1608,8 +1667,10 @@ class Releases
 				}
 			}
 		}
-
+		echo "Query 13 took ".(TIME() - $timer13)." seconds.\n";
+		$timer14 = TIME();
 		$db->queryExec(sprintf("DELETE FROM nzbs WHERE dateadded < (NOW() - INTERVAL %d HOUR)", $page->site->partretentionhours));
+		echo "Query 14 took ".(TIME() - $timer14)." seconds.\n";
 
 		echo "Removed releases : ".number_format($remcount)." past retention, ".number_format($passcount)." passworded, ".number_format($dupecount)." crossposted, ".number_format($disabledcount)." from disabled categoteries, ".number_format($disabledgenrecount)." from disabled music genres, ".number_format($miscothercount)." from misc->other";
 		if ($this->echooutput && $this->completion > 0)
@@ -1626,9 +1687,9 @@ class Releases
 	{
 		$DIR = MISC_DIR;
 		if ($this->command_exist("python3"))
-			$PYTHON = "python3 -OO";
+			$PYTHON = "python3 -OOu";
 		else
-			$PYTHON = "python -OO";
+			$PYTHON = "python -OOu";
 
 		$tot_retcount = $tot_nzbcount = $loops = 0;
 		do
@@ -1652,11 +1713,10 @@ class Releases
 
 			$tot_nzbcount = $tot_nzbcount + $nzbcount;
 			$this->processReleasesStage6($categorize, $postproc, $groupID, $echooutput=false);
-			$this->processReleasesStage7a($groupID, $echooutput=false);
+			$this->processReleasesStage7a($groupID, $echooutput);
 			$loops++;
 		// This loops as long as there were releases created or 3 loops, otherwise, you could loop indefinately
 		} while (($nzbcount > 0 || $retcount > 0) && $loops < 3);
-
 		return $tot_retcount;
 	}
 

@@ -18,7 +18,10 @@ import lib.info as info
 import signal
 import datetime
 
-print("\nPostProcess Threaded Started at %s" % (datetime.datetime.now().strftime("%H:%M:%S")))
+if len(sys.argv) == 3 and sys.argv[2] == "clean":
+	print("\nPostProcess Clean Threaded Started at %s" % (datetime.datetime.now().strftime("%H:%M:%S")))
+else:
+	print("\nPostProcess Threaded Started at %s" % (datetime.datetime.now().strftime("%H:%M:%S")))
 if len(sys.argv) == 1:
 	sys.exit("\nAn argument is required, \npostprocess_threaded.py [additional, nfo, movie, tv]\n")
 if sys.argv[1] == "additional":
@@ -55,7 +58,6 @@ tmppath = dbgrab[0][6]
 posttorun = int(dbgrab[0][7])
 postnon = dbgrab[0][8]
 
-maxtries = -1
 if maxsizeck == 0:
 	maxsize = ''
 else:
@@ -65,19 +67,25 @@ maxtries = -1
 
 if sys.argv[1] == "additional":
 	while len(datas) < run_threads * ppperrun and maxtries >= -6:
-		cur.execute("select r.ID, r.guid, r.name, c.disablepreview, r.size, r.groupID, r.nfostatus from releases r left join category c on c.ID = r.categoryID where %s r.passwordstatus between %d and -1 and (r.haspreview = -1 and c.disablepreview = 0) and nzbstatus = 1 order by r.postdate desc limit %d" % (maxsize, maxtries, run_threads * ppperrun))
+		cur.execute("select r.ID, r.guid, r.name, c.disablepreview, r.size, r.groupID, r.nfostatus from releases r left join category c on c.ID = r.categoryID where %s r.passwordstatus between %d and -1 and r.haspreview = -1 and c.disablepreview = 0 and nzbstatus = 1 and r.id in ( select r.id from releases r order by r.postdate desc ) limit %d" % (maxsize, maxtries, run_threads * ppperrun))
 		datas = cur.fetchall()
 		maxtries = maxtries - 1
 elif sys.argv[1] == "nfo":
 	while len(datas) < run_threads * nfoperrun and maxtries >= -6:
-		cur.execute("SELECT r.ID, r.guid, r.groupID, r.name FROM releases r WHERE %s r.nfostatus between %d and -1 and r.nzbstatus = 1 order by r.postdate desc limit %d" % (maxsize, maxtries, run_threads * nfoperrun))
+		cur.execute("SELECT r.ID, r.guid, r.groupID, r.name FROM releases r WHERE %s r.nfostatus between %d and -1 and r.nzbstatus = 1 and r.id in ( select r.id from releases r order by r.postdate desc ) limit %d" % (maxsize, maxtries, run_threads * nfoperrun))
 		datas = cur.fetchall()
 		maxtries = maxtries - 1
+elif sys.argv[1] == "movie" and len(sys.argv) == 3 and sys.argv[2] == "clean":
+		cur.execute("SELECT searchname as name, ID, categoryID from releases where relnamestatus not in (0, 1) and imdbID IS NULL and nzbstatus = 1 and categoryID in ( select ID from category where parentID = 2000 ) and id in ( select id from releases order by postdate desc ) limit %d" % (run_threads * movieperrun))
+		datas = cur.fetchall()
 elif sys.argv[1] == "movie":
-		cur.execute("SELECT searchname as name, ID, categoryID from releases where imdbID IS NULL and nzbstatus = 1 and categoryID in ( select ID from category where parentID = 2000 ) order by postdate desc limit %d" % (run_threads * movieperrun))
+		cur.execute("SELECT searchname as name, ID, categoryID from releases where imdbID IS NULL and nzbstatus = 1 and categoryID in ( select ID from category where parentID = 2000 ) and id in ( select id from releases order by postdate desc ) limit %d" % (run_threads * movieperrun))
+		datas = cur.fetchall()
+elif sys.argv[1] == "tv" and len(sys.argv) == 3 and sys.argv[2] == "clean":
+		cur.execute("SELECT searchname, ID from releases where relnamestatus not in (0, 1) and rageID = -1 and nzbstatus = 1 and categoryID in ( select ID from category where parentID = 5000 ) and id in ( select id from releases order by postdate desc ) limit %d" % (run_threads * tvrageperrun))
 		datas = cur.fetchall()
 elif sys.argv[1] == "tv":
-		cur.execute("SELECT searchname, ID from releases where rageID = -1 and  nzbstatus = 1 and categoryID in ( select ID from category where parentID = 5000 ) order by postdate desc limit %d" % (run_threads * tvrageperrun))
+		cur.execute("SELECT searchname, ID from releases where rageID = -1 and nzbstatus = 1 and categoryID in ( select ID from category where parentID = 5000 ) and id in ( select id from releases order by postdate desc ) limit %d" % (run_threads * tvrageperrun))
 		datas = cur.fetchall()
 
 #close connection to mysql
@@ -109,10 +117,10 @@ class queue_runner(threading.Thread):
 				if my_id:
 					time_of_last_run = time.time()
 					subprocess.call(["php", pathname+"/../nix_scripts/tmux/bin/postprocess_new.php", ""+my_id])
-					time.sleep(.5)
+					time.sleep(.01)
 					self.my_queue.task_done()
 
-def main():
+def main(args):
 	global time_of_last_run
 	time_of_last_run = time.time()
 
@@ -134,16 +142,16 @@ def main():
 	#now load some arbitrary jobs into the queue
 	if sys.argv[1] == "additional":
 		for release in datas:
-			my_queue.put("%s           =+=            %s           =+=            %s           =+=            %s           =+=            %s           =+=            %s           =+=            %s" % (release[0], release[1], release[2], release[3], release[4], release[5], release[6]))
+			my_queue.put("'%s'           =+=            '%s'           =+=            '%s'           =+=            '%s'           =+=            '%s'           =+=            '%s'           =+=            '%s'" % (release[0], release[1], release[2], release[3], release[4], release[5], release[6]))
 	elif sys.argv[1] == "nfo":
 		for release in datas:
-			my_queue.put("%s           =+=            %s           =+=            %s           =+=            %s" % (release[0], release[1], release[2], release[3]))
+			my_queue.put("'%s'           =+=            '%s'           =+=            '%s'           =+=            '%s'" % (release[0], release[1], release[2], release[3]))
 	elif sys.argv[1] == "movie":
 		for release in datas:
-			my_queue.put("%s           =+=            %s           =+=            %s" % (release[0], release[1], release[2]))
+			my_queue.put("'%s'           =+=            '%s'           =+=            '%s'" % (release[0], release[1], release[2]))
 	elif sys.argv[1] == "tv":
 		for release in datas:
-			my_queue.put("%s           =+=            %s" % (release[0], release[1]))
+			my_queue.put("'%s'           =+=            '%s'" % (release[0], release[1]))
 
 	my_queue.join()
 
@@ -167,4 +175,4 @@ def main():
 	print("Running time: %s" % (str(datetime.timedelta(seconds=time.time() - start_time))))
 
 if __name__ == '__main__':
-	main()
+	main(sys.argv[1:])

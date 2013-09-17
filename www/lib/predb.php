@@ -5,6 +5,7 @@ require_once(WWW_DIR."lib/groups.php");
 require_once(WWW_DIR."lib/nfo.php");
 require_once(WWW_DIR."lib/namefixer.php");
 require_once(WWW_DIR."lib/site.php");
+require_once(WWW_DIR."lib/consoletools.php");
 
 /*
  * Class for inserting names/categories/md5 etc from predb sources into the DB, also for matching names on files / subjects.
@@ -32,25 +33,25 @@ Class Predb
 				echo "Retrieving titles from preDB sources.\n";
 			$newwomble = $this->retrieveWomble();
 			if ($this->echooutput)
-				echo $newwomble." Retrieved.\n";
+				echo $newwomble." \tRetrieved from Womble.\n";
 			$newomgwtf = $this->retrieveOmgwtfnzbs();
 			if ($this->echooutput)
-				echo $newomgwtf." Retrieved.\n";
+				echo $newomgwtf." \tRetrieved from Omgwtfnzbs.\n";
 			$newzenet = $this->retrieveZenet();
 			if ($this->echooutput)
-				echo $newzenet." Retrieved.\n";
+				echo $newzenet." \tRetrieved from Zenet.\n";
 			$newprelist = $this->retrievePrelist();
 			if ($this->echooutput)
-				echo $newprelist." Retrieved.\n";
+				echo $newprelist." \tRetrieved from Prelist.\n";
 			$neworly = $this->retrieveOrlydb();
 			if ($this->echooutput)
-				echo $neworly." Retrieved.\n";
+				echo $neworly." \tRetrieved from Orlydb.\n";
 			$newsrr = $this->retrieveSrr();
 			if ($this->echooutput)
-				echo $newsrr." Retrieved.\n";
+				echo $newsrr." \tRetrieved from Srrdb.\n";
 			$newpdme = $this->retrievePredbme();
 			if ($this->echooutput)
-				echo $newpdme." Retrieved.\n";
+				echo $newpdme." \tRetrieved from Predbme.\n";
 			$newnames = $newwomble+$newomgwtf+$newzenet+$newprelist+$neworly+$newsrr+$newpdme;
 			if(count($newnames) > 0)
 				$db->queryExec(sprintf("UPDATE predb SET adddate = NOW() WHERE id = %d", $newestrel["id"]));
@@ -67,7 +68,7 @@ Class Predb
 	public function retrieveWomble()
 	{
 		$db = new DB();
-		$newnames = 0;
+		$newnames = $updated = 0;
 
 		$buffer = getUrl("http://www.newshost.co.za");
 		if ($buffer !== false && strlen($buffer))
@@ -99,6 +100,7 @@ Class Predb
 										$nfo = $db->escapeString("http://nzb.isasecret.com/".$matches2["nfo"]);
 
 									$db->queryExec(sprintf("UPDATE predb SET nfo = %s, size = %s, category = %s, predate = %s, adddate = now(), source = %s where id = %d", $nfo, $size, $db->escapeString($matches2["category"]), $db->from_unixtime(strtotime($matches2["date"])), $db->escapeString("womble"), $oldname["id"]));
+									$updated++;
 								}
 							}
 							else
@@ -121,13 +123,14 @@ Class Predb
 				}
 			}
 		}
+		echo $updated." \tUpdated from Womble.\n";
 		return $newnames;
 	}
 
 	public function retrieveOmgwtfnzbs()
 	{
 		$db = new DB();
-		$newnames = 0;
+		$newnames = $updated = 0;
 
 		$buffer = getUrl("http://rss.omgwtfnzbs.org/rss-info.php");
 		if ($buffer !== false && strlen($buffer))
@@ -144,12 +147,13 @@ Class Predb
 							$oldname = $db->queryOneRow(sprintf("SELECT md5, source, id FROM predb WHERE md5 = %s", $db->escapeString($md5)));
 							if ($oldname !== false && $oldname["md5"] == $md5)
 							{
-								if ($oldname["source"] == "womble")
+								if ($oldname["source"] == "womble" || $oldname["source"] == "omgwtfnzbs")
 									continue;
 								else
 								{
 									$size = $db->escapeString(round($matches2["size1"]).$matches2["size2"]);
 									$db->queryExec(sprintf("UPDATE predb SET size = %s, category = %s, predate = %s, adddate = now(), source = %s where id = %d", $size, $db->escapeString($matches2["category"]), $db->from_unixtime(strtotime($matches2["date"])), $db->escapeString("omgwtfnzbs"), $oldname["id"]));
+									$updated++;
 								}
 							}
 							else
@@ -164,6 +168,7 @@ Class Predb
 				}
 			}
 		}
+		echo $updated." \tUpdated from Omgwtfnzbs.\n";
 		return $newnames;
 	}
 
@@ -378,19 +383,21 @@ Class Predb
 		 * So I'm guessing in innodb it will be the same.
 		 */
 		$db = new DB();
+		$consoletools = new ConsoleTools();
 		$updated = 0;
 		if($this->echooutput)
-			echo "Matching up predb titles with release search names.\n";
+			echo "\nQuerying DB for matches in preDB titles with release searchnames.\n";
 
-		$res = $db->query("SELECT p.id AS preid, r.id AS releaseid FROM predb p INNER JOIN releases r ON p.title = r.searchname WHERE r.preid IS NULL");
-		if(count($res) > 0)
+		$res = $db->prepare("SELECT p.id AS preid, r.id AS releaseid FROM predb p INNER JOIN releases r ON p.title = r.searchname WHERE r.preid IS NULL");
+		$res->execute();
+		$total = $res->rowCount();
+		if($total > 0)
 		{
 			foreach ($res as $row)
 			{
-				$db->queryExec(sprintf("UPDATE releases SET preid = %d, relnamestatus = 11 WHERE id = %d", $row["preid"], $row["releaseid"]));
+				$run = $db->queryExec(sprintf("UPDATE releases SET preid = %d, relnamestatus = 11 WHERE id = %d", $row["preid"], $row["releaseid"]));
 				if($this->echooutput)
-					echo ".";
-				$updated++;
+					$consoletools->overWrite("Matching up preDB titles with release search names: ".$consoletools->percentString(++$updated,$total));
 			}
 		}
 		return $updated;
@@ -402,24 +409,28 @@ Class Predb
 		$db = new DB();
 		$nfos = 0;
 		if($this->echooutput)
-			echo "Matching up predb NFOs with releases missing an NFO.\n";
+			echo "\nMatching up predb NFOs with releases missing an NFO.\n";
 
-		$res = $db->query("SELECT r.id, p.nfo, r.completion, r.guid, r.groupid FROM releases r INNER JOIN predb p ON r.preid = p.id WHERE p.nfo IS NOT NULL AND r.nfostatus != 1 LIMIT 100");
-		if(count($res) > 0)
+		$res = $db->prepare("SELECT r.id, p.nfo, r.completion, r.guid, r.groupid FROM releases r INNER JOIN predb p ON r.preid = p.id WHERE p.nfo IS NOT NULL AND r.nfostatus != 1 LIMIT 100");
+		$res->execute();
+		$total = $res->rowCount();
+		if($total > 0)
 		{
 			$nfo = new Nfo($this->echooutput);
 			$nzbcontents = new Nzbcontents($this->echooutput);
 			foreach ($res as $row)
 			{
 				$buffer = getUrl($row["nfo"]);
-				if ($buffer !== false && strlen($buffer))
+				if ($buffer !== false)
 				{
 					if($nfo->addAlternateNfo($db, $buffer, $row))
 					{
 						if($this->echooutput)
-							echo ".";
+							echo "+";
 						$nfos++;
 					}
+					else
+						echo "-";
 				}
 			}
 			return $nfos;

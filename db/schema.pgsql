@@ -528,9 +528,13 @@ CREATE TABLE "releases" (
   "audiostatus" smallint DEFAULT 0 NOT NULL,
   "dehashstatus" smallint DEFAULT 0 NOT NULL,
   "reqidstatus" smallint DEFAULT 0 NOT NULL,
-  "nzb_guid" character varying(50)
+  "nzb_guid" character varying(50),
+  "hashed" bool DEFAULT false
 )
 WITHOUT OIDS;
+
+CREATE TRIGGER check_insert BEFORE INSERT ON releases FOR EACH ROW BEGIN IF NEW.name REGEXP '^\\[[[:digit:]]+\\]' = 0 THEN SET NEW.reqidstatus = -1; ELSEIF NEW.searchname REGEXP '[a-fA-F0-9]{32}' OR NEW.name REGEXP '[a-fA-F0-9]{32}' THEN SET NEW.hashed = true; END IF; END;
+CREATE TRIGGER check_update BEFORE UPDATE ON releases FOR EACH ROW BEGIN IF NEW.name REGEXP '^\\[[[:digit:]]+\\]' = 0 THEN SET NEW.reqidstatus = -1; ELSEIF NEW.searchname REGEXP '[a-fA-F0-9]{32}' OR NEW.name REGEXP '[a-fA-F0-9]{32}' THEN SET NEW.hashed = true; END IF; END;
 
 DROP SEQUENCE IF EXISTS "releasesubs_id_seq" CASCADE;
 CREATE SEQUENCE "releasesubs_id_seq" INCREMENT BY 1
@@ -1378,14 +1382,15 @@ INSERT INTO site
 	('delaytime','2'),
 	('addpar2', '0'),
 	('fixnamethreads', '1'),
-	('sqlpatch','118');
+	('fixnamesperrun', '10'),
+	('sqlpatch','124');
 
 
 INSERT INTO tmux (setting, value) values ('DEFRAG_CACHE','900'),
 	('MONITOR_DELAY','30'),
 	('TMUX_SESSION','nZEDb'),
 	('NICENESS','19'),
-	('BINARIES','FALSE'),
+	('BINARIES','0'),
 	('BACKFILL','0'),
 	('IMPORT','0'),
 	('NZBS','/path/to/nzbs'),
@@ -1444,7 +1449,8 @@ INSERT INTO tmux (setting, value) values ('DEFRAG_CACHE','900'),
 	('COLORS_END', '250'),
 	('COLORS_EXC', '4, 8, 9, 11, 15, 16, 17, 18, 19, 46, 47, 48, 49, 50, 51, 52, 53, 59, 60'),
 	('MONITOR_PATH_A', NULL),
-	('MONITOR_PATH_B', NULL);
+	('MONITOR_PATH_B', NULL),
+	('COLORS', 'FALSE');
 
 
 INSERT INTO tvrage (id, rageid, releasetitle, description, createddate, imgdata, tvdbid)
@@ -11578,6 +11584,8 @@ DROP INDEX IF EXISTS "movieinfo_title" CASCADE;
 CREATE INDEX "movieinfo_title" ON "movieinfo" ("title");ALTER TABLE "musicinfo" ADD CONSTRAINT "musicinfo_id_pkey" PRIMARY KEY("id");ALTER TABLE "nzbs" ADD CONSTRAINT "id_pkey" PRIMARY KEY("id");
 DROP INDEX IF EXISTS "nzbs_partnumber" CASCADE;
 CREATE INDEX "nzbs_partnumber" ON "nzbs" ("partnumber");
+DROP INDEX IF EXISTS "nzbs_message" CASCADE;
+CREATE UNIQUE INDEX "nzbs_message" ON "nzbs" ("message_id");
 DROP INDEX IF EXISTS "nzbs_collectionhash" CASCADE;
 CREATE INDEX "nzbs_collectionhash" ON "nzbs" ("collectionhash");ALTER TABLE "partrepair" ADD CONSTRAINT "partrepair_id_pkey" PRIMARY KEY("id");
 DROP INDEX IF EXISTS "partrepair_numberID_groupid" CASCADE;

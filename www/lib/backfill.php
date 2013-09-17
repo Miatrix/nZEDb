@@ -14,6 +14,7 @@ class Backfill
 		$this->safebdate = (!empty($site->safebackfilldate)) ? $site->safebackfilldate : 2012-06-24;
 		$this->hashcheck = (!empty($site->hashcheck)) ? $site->hashcheck : 0;
 		$this->sleeptime = (!empty($site->postdelay)) ? $site->postdelay : 300;
+		$this->compressedHeaders = ($site->compressedheaders == "1") ? true : false;
 	}
 
 	// Backfill groups using user specified time/date.
@@ -337,7 +338,6 @@ class Backfill
 				if ($data === false)
 					return;
 			}
-
 			$msgs = $nntp->getOverview($post."-".$post,true,false);
 			if(PEAR::isError($msgs))
 			{
@@ -358,22 +358,21 @@ class Backfill
 
 			if(!isset($msgs[0]['Date']) || $msgs[0]['Date']=="" || is_null($msgs[0]['Date']))
 			{
-				$post = $post+1;
+				$post = $post + MT_RAND(0,100);
 				$success = false;
 			}
 			else
 			{
 				$date = $msgs[0]['Date'];
-				if (strlen($date > 0))
+				if (strlen($date) > 0)
 					$success = true;
 			}
 
 			if($debug && $attempts > 0)
 				echo "Retried ".$attempts." time(s).\n";
 
-			usleep(100000);
 			$attempts++;
-		}while($attempts <= 5 && $success === false);
+		} while ($attempts <= 10 && $success === false);
 
 		if ($st === true)
 			$nntp->doQuit();
@@ -496,7 +495,7 @@ class Backfill
 		$binaries = new Binaries();
 		$groupArr = $groups->getByName($group);
 
-		echo 'Processing '.$groupArr['name']." ==> T-".$threads." ==> ".number_format($first)." to ".number_format($last).$n;
+		echo "Processing ".$groupArr['name'].(($this->compressedHeaders)?" Using Compression":" Not UsingCompression")." ==> T-".$threads." ==> ".number_format($first)." to ".number_format($last).$n;
 		$this->startLoop = microtime(true);
 		// Let scan handle the connection.
 		$lastId = $binaries->scan(null, $groupArr, $last, $first, 'backfill');
@@ -505,13 +504,22 @@ class Backfill
 			return;
 	}
 
-	function getFinal($group, $first)
+	function getFinal($group, $first, $type)
 	{
 		$db = new DB();
 		$groups = new Groups();
 		$groupArr = $groups->getByName($group);
-		// Let postdate handle the connection.
-		$db->queryExec(sprintf("UPDATE groups SET first_record_postdate = %s, first_record = %s, last_updated = NOW() WHERE id = %d", $db->from_unixtime($this->postdate(null,$first,false,$group)), $db->escapeString($first), $groupArr['id']));
-		echo "Backfill Safe Threaded on ".$group." completed.\n\n";
+		$postsdate = 0;
+		while ($postsdate <= 1)
+		{
+			$postsdate = $this->postdate(null,$first,false,$group,true);
+			//echo "Trying to get postdate on ".$first."\n";
+		}
+		$postsdate = $db->from_unixtime($postsdate);
+		if ($type == "Backfill")
+			$db->queryExec(sprintf("UPDATE groups SET first_record_postdate = %s, first_record = %s, last_updated = NOW() WHERE id = %d", $postsdate, $db->escapeString($first), $groupArr['id']));
+		else
+			$db->queryExec(sprintf("UPDATE groups SET last_record_postdate = %s, last_record = %s, last_updated = NOW() WHERE id = %d", $postsdate, $db->escapeString($first), $groupArr['id']));
+		echo $type." Safe Threaded on ".$group." completed.\n\n";
 	}
 }

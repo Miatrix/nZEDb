@@ -165,8 +165,10 @@ class PostProcess
 	}
 
 	// Attempt to get a better name from a par2 file and categorize the release.
-	public function parsePAR2($messageID, $relID, $groupID)
+	public function parsePAR2($messageID, $relID, $groupID, $nntp)
 	{
+		if ($messageID == "")
+			return false;
 		$db = new DB();
 		$category = new Category();
 		if ($db->dbSystem() == "mysql")
@@ -174,17 +176,20 @@ class PostProcess
 		elseif ($db->dbSystem() == "pgsql")
 			$t = "extract(epoch FROM postdate)";
 		$quer = $db->queryOneRow("SELECT id, groupid, categoryid, relnamestatus, searchname, ".$t." as postdate, id as releaseid  FROM releases WHERE id = {$relID}");
-		if (!in_array($quer["relnamestatus"], array(0, 1, 6, 20)) || $quer["relnamestatus"] === 7 || $quer["categoryid"] != Category::CAT_MISC)
+		if (!in_array($quer["relnamestatus"], array(0, 1, 6, 20, 21)) || $quer["relnamestatus"] === 7 || $quer["categoryid"] != Category::CAT_MISC)
 			return false;
 
-		$nntp = new NNTP();
-		$nntp->doConnect();
+		if (!isset($nntp))
+		{
+			$nntp = new Nntp();
+			$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
+		}
 		$groups = new Groups();
 		$par2 = $nntp->getMessage($groups->getByNameByID($groupID), $messageID);
 		if ($par2 === false || PEAR::isError($par2))
 		{
 			$nntp->doQuit();
-			$nntp->doConnect();
+			$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 			$par2 = $nntp->getMessage($groups->getByNameByID($groupID), $messageID);
 			if ($par2 === false || PEAR::isError($par2))
 			{
@@ -193,7 +198,6 @@ class PostProcess
 			}
 		}
 		$nntp->doQuit();
-
 		$par2info = new Par2Info();
 		$par2info->setData($par2);
 		if ($par2info->error)
@@ -352,7 +356,7 @@ class PostProcess
 				$tries = (5 * -1) -1;
 				while ((count($result) != $this->addqty) && ($i >= $tries))
 				{
-					$result = $this->db->query(sprintf("SELECT r.id, r.guid, r.name, c.disablepreview, r.size, r.groupid, r.nfostatus, r.completion FROM releases r LEFT JOIN category c ON c.id = r.categoryid WHERE r.size < %d AND r.passwordstatus BETWEEN %d AND -1 AND (r.haspreview = -1 AND c.disablepreview = 0) AND nzbstatus = 1 ORDER BY r.postdate DESC LIMIT %d", $this->maxsize*1073741824, $i, $this->addqty));
+					$result = $this->db->query(sprintf("SELECT r.id, r.guid, r.name, c.disablepreview, r.size, r.groupid, r.nfostatus, r.completion FROM releases r LEFT JOIN category c ON c.id = r.categoryid WHERE r.size < %d AND r.passwordstatus BETWEEN %d AND -1 AND (r.haspreview = -1 AND c.disablepreview = 0) AND nzbstatus = 1 AND r.id IN ( SELECT r.id FROM releases r ORDER BY r.postdate DESC ) LIMIT %d", $this->maxsize*1073741824, $i, $this->addqty));
 					if (count($result) > 0)
 						$this->doecho("Passwordstatus = ".$i.": Available to process = ".count($result));
 					$i--;
@@ -361,7 +365,7 @@ class PostProcess
 			else
 			{
 				$pieces = explode("           =+=            ", $releaseToWork);
-				$result = array(array('id' => $pieces[0], 'guid' => $pieces[1], 'name' => $pieces[2], 'disablepreview' => $pieces[3], 'size' => $pieces[4], 'groupid' => $pieces[5], 'nfostatus' => $pieces[6]));
+				$result = array(array('id' => $pieces[0], 'guid' => trim($pieces[1],"'"), 'name' => trim($pieces[2],"'"), 'disablepreview' => trim($pieces[3],"'"), 'size' => trim($pieces[4],"'"), 'groupid' => trim($pieces[5],"'"), 'nfostatus' => trim($pieces[6],"'")));
 			}
 		}
 
@@ -559,12 +563,12 @@ class PostProcess
 							{
 								$mid = array_slice((array)$rarFile["segments"], 0, $this->segmentstodownload);
 								$bingroup = $groupName;
-								$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+								$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 								$fetchedBinary = $nntp->getMessages($bingroup, $mid);
 								if ($fetchedBinary === false || PEAR::isError($fetchedBinary))
 								{
 									$nntp->doQuit();
-									$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+									$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 									$fetchedBinary = $nntp->getMessages($bingroup, $mid);
 									if ($fetchedBinary === false || PEAR::isError($fetchedBinary))
 									{
@@ -707,12 +711,12 @@ class PostProcess
 					{
 						if (!empty($samplemsgid))
 						{
-							$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+							$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 							$sampleBinary = $nntp->getMessages($samplegroup, $samplemsgid);
 							if ($sampleBinary === false || PEAR::isError($sampleBinary))
 							{
 								$nntp->doQuit();
-								$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+								$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 								$sampleBinary = $nntp->getMessages($samplegroup, $samplemsgid);
 								if ($sampleBinary === false || PEAR::isError($sampleBinary))
 								{
@@ -751,12 +755,12 @@ class PostProcess
 					{
 						if (!empty($mediamsgid))
 						{
-							$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+							$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 							$mediaBinary = $nntp->getMessages($mediagroup, $mediamsgid);
 							if ($mediaBinary === false || PEAR::isError($mediaBinary))
 							{
 								$nntp->doQuit();
-								$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+								$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 								$mediaBinary = $nntp->getMessages($mediagroup, $mediamsgid);
 								if ($mediaBinary === false || PEAR::isError($mediaBinary))
 								{
@@ -793,12 +797,12 @@ class PostProcess
 				// Download audio file, use mediainfo to try to get the artist / album.
 				if($processAudioinfo === true && !empty($audiomsgid) && $blnTookAudioinfo === false)
 				{
-					$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+					$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 					$audioBinary = $nntp->getMessages($audiogroup, $audiomsgid);
 					if ($audioBinary === false || PEAR::isError($audioBinary))
 					{
 						$nntp->doQuit();
-						$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+						$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 						$audioBinary = $nntp->getMessages($audiogroup, $audiomsgid);
 						if ($audioBinary === false || PEAR::isError($audioBinary))
 						{
@@ -828,12 +832,12 @@ class PostProcess
 				// Download JPG file.
 				if($processJPGSample === true && !empty($jpgmsgid) && $blnTookJPG === false)
 				{
-					$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+					$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 					$jpgBinary = $nntp->getMessages($jpggroup, $jpgmsgid);
 					if ($jpgBinary === false || PEAR::isError($jpgBinary))
 					{
 						$nntp->doQuit();
-						$this->site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+						$this->site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 						$jpgBinary = $nntp->getMessages($jpggroup, $jpgmsgid);
 						if ($jpgBinary === false || PEAR::isError($jpgBinary))
 						{
@@ -847,7 +851,7 @@ class PostProcess
 						if ($this->echooutput)
 							echo "b";
 						$this->addmediafile($this->tmpPath."samplepicture.jpg", $jpgBinary);
-						if (is_dir($this->tmpPath))
+						if (is_dir($this->tmpPath) && is_file($this->tmpPath."samplepicture.jpg"))
 						{
 							if (filesize($this->tmpPath."samplepicture.jpg") > 15 && exif_imagetype($this->tmpPath."samplepicture.jpg") !== false && $blnTookJPG === false)
 							{
@@ -1201,8 +1205,7 @@ class PostProcess
 			}
 
 			$files = $rar->getArchiveFileList();
-
-			if (count($files) == 0)
+			if (count($files) == 0 || !is_array($files) || !isset($files[0]["compressed"]))
 				return false;
 
 			if ($files[0]["compressed"] == 0 && $files[0]["name"] != $this->name)
