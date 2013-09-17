@@ -34,8 +34,10 @@ cur.execute("select value from site where setting = 'grabnzbs'")
 grab = cur.fetchone()
 if int(grab[0]) == 0:
 	sys.exit("GrabNZBs is disabled")
+cur.execute("select value from site where setting = 'delaytime'")
+delay = cur.fetchone()
 
-cur.execute("select collectionhash from nzbs group by collectionhash, totalparts having count(*) >= totalparts union select distinct(collectionhash) from nzbs where dateadded < now() - interval 2 hour")
+cur.execute("select collectionhash from nzbs group by collectionhash, totalparts having count(*) >= totalparts union select distinct(collectionhash) from nzbs where dateadded < now() - interval %d hour" % int(delay[0]))
 datas = cur.fetchall()
 if len(datas) == 0:
 	sys.exit("No NZBs to Grab")
@@ -69,7 +71,7 @@ class queue_runner(threading.Thread):
 				if my_id:
 					time_of_last_run = time.time()
 					subprocess.call(["php", pathname+"/../nix_scripts/tmux/bin/grabnzbs.php", ""+my_id])
-					time.sleep(.5)
+					time.sleep(.01)
 					self.my_queue.task_done()
 
 def main():
@@ -77,6 +79,7 @@ def main():
 	time_of_last_run = time.time()
 
 	print("We will be using a max of %s threads, a queue of %s nzbs" % (run_threads[0], "{:,}".format(len(datas))))
+	print("+ = nzb imported, - = nzb not imported and deleted from table")
 	time.sleep(2)
 
 	def signal_handler(signal, frame):

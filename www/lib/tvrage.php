@@ -441,13 +441,13 @@ class TvRage
 		// Get all releases without a rageid which are in a tv category.
 		if ($releaseToWork == '')
 		{
-			$res = $db->query(sprintf("SELECT searchname, id FROM releases WHERE rageid = -1 AND nzbstatus = 1 AND categoryid IN (SELECT id FROM category WHERE parentid = %d) ORDER BY postdate DESC LIMIT %d", Category::CAT_PARENT_TV, $this->rageqty));
+			$res = $db->query(sprintf("SELECT searchname, id FROM releases WHERE rageid = -1 AND nzbstatus = 1 AND categoryid IN (SELECT id FROM category WHERE parentid = %d) AND id IN ( SELECT id FROM releases ORDER BY postdate DESC ) LIMIT %d", Category::CAT_PARENT_TV, $this->rageqty));
 			$tvcount = count($res);
 		}
 		else
 		{
 			$pieces = explode("           =+=            ", $releaseToWork);
-			$res = array(array('searchname' => $pieces[0], 'id' => $pieces[1]));
+			$res = array(array('searchname' => trim($pieces[0],"'"), 'id' => trim($pieces[1],"'")));
 			$tvcount = 1;
 		}
 

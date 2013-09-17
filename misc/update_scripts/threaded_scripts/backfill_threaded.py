@@ -30,7 +30,7 @@ con = mdb.connect(host=conf['DB_HOST'], user=conf['DB_USER'], passwd=conf['DB_PA
 cur = con.cursor()
 
 #get values from db
-cur.execute("select (select value from site where setting = 'backfillthreads') as a, (select value from tmux where setting = 'BACKFILL') as c, (select value from tmux where setting = 'BACKFILL_GROUPS') as d, (select value from tmux where setting = 'BACKFILL_ORDER') as e, (select value from tmux where setting = 'BACKFILL_DAYS') as f")
+cur.execute("SELECT (SELECT value FROM site where setting = 'backfillthreads') as a, (SELECT value FROM tmux where setting = 'BACKFILL') as c, (SELECT value FROM tmux where setting = 'BACKFILL_GROUPS') as d, (SELECT value FROM tmux where setting = 'BACKFILL_ORDER') as e, (SELECT value FROM tmux where setting = 'BACKFILL_DAYS') as f")
 dbgrab = cur.fetchall()
 run_threads = int(dbgrab[0][0])
 type = int(dbgrab[0][1])
@@ -56,13 +56,13 @@ else:
 if intbackfilltype == 1:
 	backfilldays = "backfill_target"
 elif intbackfilltype == 2:
-	backfilldays = "datediff(curdate(),(select value from site where setting = 'safebackfilldate'))"
+	backfilldays = "datediff(curdate(),(SELECT value FROM site where setting = 'safebackfilldate'))"
 
 #query to grab backfill groups
 if len(sys.argv) > 1 and sys.argv[1] == "all":
-	cur.execute("%s %s" % ("SELECT name, first_record from groups where first_record IS NOT NULL and backfill = 1 ", group))
+	cur.execute("%s %s" % ("SELECT name, first_record FROM groups where first_record IS NOT NULL and backfill = 1 ", group))
 else:
-	cur.execute("%s %s %s %s %s %d" % ("SELECT name, first_record from groups where first_record IS NOT NULL and first_record_postdate IS NOT NULL and backfill = 1 and first_record_postdate != '2000-00-00 00:00:00' and (now() - interval", backfilldays, " day) < first_record_postdate ", group, " limit ", groups))
+	cur.execute("%s %s %s %s %s %d" % ("SELECT name, first_record FROM groups where first_record IS NOT NULL and first_record_postdate IS NOT NULL and backfill = 1 and first_record_postdate != '2000-00-00 00:00:00' and (now() - interval", backfilldays, " day) < first_record_postdate ", group, " limit ", groups))
 datas = cur.fetchall()
 if not datas:
 	print("No Groups enabled for backfill")
@@ -96,7 +96,7 @@ class queue_runner(threading.Thread):
 						subprocess.call(["php", pathname+"/../nix_scripts/tmux/bin/backfill_all_quick.php", ""+my_id])
 					else:
 						subprocess.call(["php", pathname+"/../nix_scripts/tmux/bin/backfill_interval.php", ""+my_id])
-					time.sleep(.5)
+					time.sleep(.01)
 					self.my_queue.task_done()
 
 def main(args):
@@ -120,7 +120,7 @@ def main(args):
 
 	#now load some arbitrary jobs into the queue
 	for gnames in datas:
-		my_queue.put("%s %s" % (gnames[0], type))
+		my_queue.put("'%s' '%s'" % (gnames[0], type))
 
 	my_queue.join()
 

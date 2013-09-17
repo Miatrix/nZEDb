@@ -610,7 +610,7 @@ class Category
 	//	TV.
 	public function isTV($releasename, $assumeTV=TRUE)
 	{
-		$looksLikeTV = preg_match('/\bS\d+\b(720|1080|Dvd|Blu)|s\d{1,3}[-._ ]?[ed]\d{1,3}(e\d{1,3}|[-.\w ])|[-._ ](\dx\d\d|C4TV|Complete[-._ ]Season|DSR|(D|H|P)DTV|EP[-._ ]?\d{1,3}|S\d{1,3}.+Extras|SUBPACK|Season[-._ ]\d{1,2}|WEB\-DL|WEBRip)([-._ ]|$)|TV[-._ ](19|20)\d\d|TrollHD/i', $releasename);
+		$looksLikeTV = preg_match('/\bS\d+\b(720|1080|Dvd|Blu)|s\d{1,3}[-._ ]?[ed]\d{1,3}(e\d{1,3}|[-.\w ])|[-._ ](\dx\d\d|C4TV|Complete[-._ ]Season|DSR|(D|H|P)DTV|EP[-._ ]?\d{1,3}|S\d{1,3}.+Extras|SUBPACK|Season[-._ ]\d{1,2}|WEB\-DL|WEBRip)([-._ ]|$)|TV[-._ ](19|20)\d\d|TrollHD|\bS\d+(\s|\b)?D\d+\b/i', $releasename);
 		$looksLikeSportTV = preg_match('/[-._ ]((19|20)\d\d[-._ ]\d{1,2}[-._ ]\d{1,2}[-._ ]VHSRip|Indy[-._ ]?Car|(iMPACT|Smoky[-._ ]Mountain|Texas)[-._ ]Wrestling|Moto[-._ ]?GP|NSCS[-._ ]ROUND|NECW[-._ ]TV|(Per|Post)\-Show|PPV|WrestleMania|WCW|WEB[-._ ]HD|WWE[-._ ](Monday|NXT|RAW|Smackdown|Superstars|WrestleMania))[-._ ]/i', $releasename);
 		if ($looksLikeTV && !preg_match('/[-._ ](flac|imageset|mp3|xxx)[-._ ]|[ .]exe$/i', $releasename))
 		{
@@ -1087,7 +1087,12 @@ class Category
 	{
 		if (preg_match('/NDS|[\. ]nds|nintendo.+3ds/', $releasename))
 		{
-			if(preg_match('/\((DE|DSi(\sEnhanched)?|EUR?|FR|GAME|HOL|JP|NL|NTSC|PAL|KS|USA?)\)/i', $releasename))
+			if(preg_match('/\((DE|DSi(\sEnhanched)?|EUR?|FR|GAME|HOL|JP|JPN|NL|NTSC|PAL|KS|USA?)\)/i', $releasename))
+			{
+				$this->tmpCat = Category::CAT_GAME_NDS;
+				return true;
+			}
+			if(preg_match('/(EUR|FR|GAME|HOL|JP|JPN|NL|NTSC|PAL|KS|USA)/i', $releasename))
 			{
 				$this->tmpCat = Category::CAT_GAME_NDS;
 				return true;
@@ -1100,7 +1105,7 @@ class Category
 	{
 		if (preg_match('/PS3/i', $releasename))
 		{
-			if (preg_match('/ANTiDOTE|DLC|DUPLEX|EUR?|Googlecus|GOTY|\-HR|iNSOMNi|JPN|KONDIOS|\[PS3\]|PSN/i', $releasename))
+			if (preg_match('/ANTiDOTE|DLC|DUPLEX|EUR?|Googlecus|GOTY|\-HR|iNSOMNi|JAP|JPN|KONDIOS|\[PS3\]|PSN/i', $releasename))
 			{
 				$this->tmpCat = Category::CAT_GAME_PS3;
 				return true;

@@ -73,7 +73,7 @@ require_once dirname(__FILE__).'/szipinfo.php';
  * @author     Hecks
  * @copyright  (c) 2010-2013 Hecks
  * @license    Modified BSD
- * @version    2.2
+ * @version    2.3
  */
 class ArchiveInfo extends ArchiveReader
 {
@@ -113,6 +113,12 @@ class ArchiveInfo extends ArchiveReader
 	 * @var integer
 	 */
 	public $type = self::TYPE_NONE;
+
+	/**
+	 * Is the archive encrypted with a password?
+	 * @var boolean
+	 */
+	public $isEncrypted = false;
 
 	/**
 	 * Sets the list of supported archive reader classes for the current instance,
@@ -625,6 +631,22 @@ class ArchiveInfo extends ArchiveReader
 			return $this->reader->$name;
 
 		return parent::__get($name);
+	}
+
+	/**
+	 * Magic method for testing whether properties of the stored reader are set.
+	 * Note that if called via empty(), if the method returns TRUE a second call
+	 * is made to __get() to test if the actual value is false.
+	 *
+	 * @param   string  $name  the property name
+	 * @return  boolean
+	 */
+	public function __isset($name)
+	{
+		if ($this->reader)
+			return isset($this->reader->$name);
+
+		return false;
 	}
 
 	/**

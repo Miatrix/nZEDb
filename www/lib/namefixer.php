@@ -4,6 +4,7 @@ require_once(WWW_DIR."lib/framework/db.php");
 require_once(WWW_DIR."lib/category.php");
 require_once(WWW_DIR."lib/groups.php");
 require_once(WWW_DIR."lib/namecleaning.php");
+require_once(WWW_DIR."lib/nzbcontents.php");
 
 /* Values of relnamestatus:
  * 0  : New release, just inserted into the table.
@@ -19,7 +20,9 @@ require_once(WWW_DIR."lib/namecleaning.php");
  * 10 : Fixed with namefixer preDB.
  * 11 : Fixed with predb.php
  * 12 : Fixed with requestID.
- * 20 : The release was checked by namefixer but no name was found
+ * 20 : The release was checked by namefixer nfo but no name was found
+ * 21 : The release was checked by namefixer filename but no name was found
+ * 22 : The release was checked by namefixer par2 but no name was found
  */
 
 class Namefixer
@@ -72,16 +75,25 @@ class Namefixer
 			foreach ($relres as $relrow)
 			{
 				//ignore encrypted nfos
-				if (preg_match('/^=newz\[NZB\]=\w+/', $relrow['nfo']))
+				if (preg_match('/^=newz\[NZB\]=\w+/', $relrow['textstring']))
 				{
-					$fail = $db->prepare(sprintf("UPDATE releases SET relnamestatus = 20 WHERE id = %d", $relrow['id']));
+					$fail = $db->prepare(sprintf("UPDATE releases SET relnamestatus = 20 WHERE id = %d", $relrow['rel.id']));
 					$fail->execute();
 					$this->checked++;
+				}
+				elseif (preg_match('/[^._-]?([A-Z0-9][-.\w]{5,}-[A-Za-z0-9]{2,})(\.[A-Za-z0-9]{2,3})?/', $relrow['textstring']))
+				{
+					$this->done = $this->matched = false;
+					$this->checkName($relrow, $echo, $type, $namestatus);
+					$this->checked++;
+					if ($this->checked % 500 == 0)
+						echo $this->checked." NFOs processed.\n\n";
 				}
 				else
 				{
 					$this->done = $this->matched = false;
 					$this->checkName($relrow, $echo, $type, $namestatus);
+					echo "this did not match initial query\n";
 					$this->checked++;
 					if ($this->checked % 500 == 0)
 						echo $this->checked." NFOs processed.\n\n";
@@ -140,9 +152,55 @@ class Namefixer
 			echo "Nothing to fix.\n";
 	}
 
+	//  Attempts to fix release names using the Par2 File.
+	public function fixNamesWithPar2($time, $echo, $cats, $namestatus)
+	{
+		if ($time == 1)
+			echo "Fixing search names in the past 6 hours using the par2 files.\n";
+		else
+			echo "Fixing search names since the beginning using the par2 files.\n";
+
+		$db = new DB();
+		$type = "Filenames, ";
+		$query = "SELECT id AS releaseid, guid, groupid FROM releases WHERE categoryid = 7010 AND relnamestatus IN (0, 1, 20, 21)";
+
+		//24 hours, other cats
+		if ($time == 1 && $cats == 1)
+			$relres = $db->query($query.$this->timeother);
+		//24 hours, other cats
+		if ($time == 1 && $cats == 2)
+			$relres = $db->query($query.$this->timeother);
+		//other cats
+		if ($time == 2 && $cats == 1)
+			$relres = $db->query($query.$this->fullother);
+		//other cats
+		if ($time == 2 && $cats == 2)
+			$relres = $db->query($query.$this->fullother);
+
+		if (count($relres) > 0)
+		{
+			foreach ($relres as $relrow)
+			{
+				$nzbcontents = new NZBcontents();
+				$nzbcontents->checkPAR2($relrow['guid'], $relrow['releaseid'], $relrow['groupid'], true);
+				$this->checked++;
+				echo ".";
+				if ($this->checked % 500 == 0)
+					echo $this->checked." files processed.\n\n";
+			}
+			if($echo == 1)
+				echo $this->fixed." releases have had their names changed out of: ".$this->checked." files.\n";
+			else
+				echo $this->fixed." releases could have their names changed. ".$this->checked." files were checked.\n";
+		}
+		else
+			echo "Nothing to fix.\n";
+	}
+
 	//  Update the release with the new information.
 	public function updateRelease($release, $name, $method, $echo, $type, $namestatus)
 	{
+		$echooutput = true;
 		if ($this->relid !== $release["releaseid"])
 		{
 			$namecleaning = new nameCleaning();
@@ -193,11 +251,13 @@ class Namefixer
 							$status = 7;
 						else if ($type == "Filenames, ")
 							$status = 9;
-						$db->queryExec(sprintf("UPDATE releases SET searchname = %s, relnamestatus = %d, categoryid = %d WHERE id = %d", $db->escapeString(substr($newname, 0, 255)), $status, $determinedcat, $release["releaseid"]));
+						$run = $db->prepare(sprintf("UPDATE releases SET searchname = %s, relnamestatus = %d, categoryid = %d WHERE id = %d", $db->escapeString(substr($newname, 0, 255)), $status, $determinedcat, $release["releaseid"]));
+						$run->execute();
 					}
 					else
 					{
-						$db->queryExec(sprintf("UPDATE releases SET searchname = %s, categoryid = %d WHERE id = %d", $db->escapeString($newname), $determinedcat, $release["releaseid"]));
+						$run = $db->prepare(sprintf("UPDATE releases SET searchname = %s, categoryid = %d WHERE id = %d", $db->escapeString(substr($newname, 0, 255)), $determinedcat, $release["releaseid"]));
+						$run->execute();
 					}
 				}
 			}
@@ -286,10 +346,15 @@ class Namefixer
 			$db->queryExec(sprintf("UPDATE releases SET relnamestatus = 20 WHERE id = %d", $release["releaseid"]));
 		}
 		// The release didn't match so set relnamestatus to 21 so it doesn't get rechecked. Also allows removeCrapReleases to run extra things on the release.
-		if ($namestatus == 1 && $this->matched === false && $type == "Filenames, ")
+		elseif ($namestatus == 1 && $this->matched === false && $type == "Filenames, ")
 		{
 			$db = new DB();
 			$db->queryExec(sprintf("UPDATE releases SET relnamestatus = 21 WHERE id = %d", $release["releaseid"]));
+		}
+		elseif ($namestatus == 1 && $this->matched === false && $type == "PAR2, ")
+		{
+			$db = new DB();
+			$db->queryExec(sprintf("UPDATE releases SET relnamestatus = 22 WHERE id = %d", $release["releaseid"]));
 		}
 	}
 

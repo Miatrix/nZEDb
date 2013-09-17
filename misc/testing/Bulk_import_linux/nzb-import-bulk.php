@@ -25,8 +25,8 @@ if (!isset($argv[1]))
 if (!isset($argv[2]))
 {
 	$pieces = explode(" ", $argv[1]);
-	$usenzbname = (isset($pieces[1]) && $pieces[1] == 'true') ? true : false;
-	$path = $pieces[0];
+	$usenzbname = (isset($pieces[1]) && trim($pieces[1],"'") == 'true') ? true : false;
+	$path = trim($pieces[0],"'");
 }
 else
 {
@@ -132,7 +132,8 @@ else
 			$date = date("Y-m-d H:i:s", (string)($file->attributes()->date));
 			$postdate[] = $date;
 			//removes everything after yEnc in subject
-			$partless = preg_replace('/yEnc.*?$/i', 'yEnc', $firstname['0']);
+			$partless = preg_replace('/(\(\d+\/\d+\))?(\(\d+\/\d+\))?(\(\d+\/\d+\))?(\(\d+\/\d+\))?(\(\d+\/\d+\))?(\(\d+\/\d+\))?(\(\d+\/\d+\))?$/', 'yEnc', $firstname['0']);
+			$partless = preg_replace('/yEnc.*?$/i', 'yEnc', $partless);
             $subject = utf8_encode(trim($partless));
 			$namecleaning = new nameCleaning();
 

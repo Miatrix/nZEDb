@@ -70,9 +70,10 @@ class Nfo
 		$r = false;
 		if ($possibleNFO === false)
 			return $r;
-		//ignore encrypted nfos
+		// Ignore encrypted nfos
 		if (preg_match('/^=newz\[NZB\]=\w+/', $possibleNFO))
 			return $r;
+		// Ignore other file types
 		if (preg_match('/(<?xml|;\s*Generated\sby.+SF\w|^\s*PAR|\.[a-z0-9]{2,7}\s[a-z0-9]{8}|^\s*RAR|\A.{0,10}(JFIF|matroska|ftyp|ID3))/i', $possibleNFO))
 			return $r;
 		// Make sure it's not too big, also exif_imagetype needs a minimum size or else it doesn't work.
@@ -132,9 +133,10 @@ class Nfo
 	}
 
 	// Adds an NFO found from predb, rar, zip etc...
-	public function addAlternateNfo($db, $nfo, $release)
+	public function addAlternateNfo($db, $nfo, $release, $nntp=NULL)
 	{
-		if ($this->isNFO($nfo) && $release["id"] > 0)
+		//if ($this->isNFO($nfo) && $release["id"] > 0)
+		if ($release["id"] > 0)
 		{
 			$this->addReleaseNfo($release["id"]);
 			if ($db->dbSystem() == "mysql")
@@ -154,7 +156,7 @@ class Nfo
 			if ($release["completion"] == 0)
 			{
 				$nzbcontents = new NZBcontents($this->echooutput);
-				$nzbcontents->NZBcompletion($release["guid"], $release["id"], $release["groupid"]);
+				$nzbcontents->NZBcompletion($release["guid"], $release["id"], $release["groupid"], $nntp);
 			}
 			return true;
 		}
@@ -173,7 +175,7 @@ class Nfo
 			$i = -1;
 			while (($nfocount != $this->nzbs) && ($i >= -6))
 			{
-				$res = $db->query(sprintf("SELECT id, guid, groupid, name FROM releases WHERE nfostatus between %d AND -1 AND nzbstatus = 1 AND size < %s ORDER BY postdate DESC LIMIT %d", $i, $this->maxsize*1073741824, $this->nzbs));
+				$res = $db->query(sprintf("SELECT id, guid, groupid, name FROM releases WHERE nfostatus between %d AND -1 AND nzbstatus = 1 AND size < %s AND id IN ( SELECT id FROM releases ORDER BY postdate DESC ) LIMIT %d", $i, $this->maxsize*1073741824, $this->nzbs));
 				$nfocount = count($res);
 				$i--;
 			}
@@ -182,7 +184,7 @@ class Nfo
 		{
 			$res = 0;
 			$pieces = explode("           =+=            ", $releaseToWork);
-			$res = array(array('id' => $pieces[0], 'guid' => $pieces[1], 'groupid' => $pieces[2], 'name' => $pieces[3]));
+			$res = array(array('id' => trim($pieces[0],"'"), 'guid' => trim($pieces[1],"'"), 'groupid' => trim($pieces[2],"'"), 'name' => trim($pieces[3],"'")));
 			$nfocount = 1;
 		}
 
@@ -200,7 +202,7 @@ class Nfo
 
 			foreach ($res as $arr)
 			{
-				$site->alternate_nntp == "1" ? $nntp->doConnect_A() : $nntp->doConnect();
+				$site->alternate_nntp == 1 ? $nntp->doConnect_A() : $nntp->doConnect();
 				$fetchedBinary = $nzbcontents->getNFOfromNZB($arr['guid'], $arr['id'], $arr['groupid'], $nntp);
 				if ($fetchedBinary !== false)
 				{
