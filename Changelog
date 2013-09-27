@@ -1,7 +1,17 @@
 NOTE: Add this to config.php   define('DB_SYSTEM', 'mysql');
 
-09172013 -> jonnyboy -> made color pane optional
-						fixed bug in fixreleasenames par2
+09252013 -> jonnyboy -> added table for country codes, tvrage does not always return an abbreviation
+                        added yesterdays patch to schema, correct patch for pgsql
+09242013 -> jonnyboy -> numerous changes queries, improved query speed, fixed some bugs
+09212013 -> jonnyboy -> fixed a few bugs
+                        updated python scripts to use Psycopg, untested
+                        updated install texts to reflect changes for Psycopg
+                        updated binaries safe to start new groups
+09192013 -> jonnyboy -> fixed stage 4 thx kevin123
+09182013 -> jonnyboy -> bugfixes
+09172013 -> jonnyboy -> moved triggers out of schema and into separate file, fixed step2.php
+                        made color pane optional
+                        fixed bug in fixreleasenames par2
 09162013 -> jonnyboy -> added pron to monitor
                         changed python script to escape strings
                         bug fixes

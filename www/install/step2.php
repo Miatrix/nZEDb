@@ -67,9 +67,6 @@ if  ($page->isPostBack())
 
 	$dbtype = $cfg->DB_SYSTEM;
 
-// While we work on postgresql make it fail so people can't use it. If you are a dev comment our the 2 lines.
-if (strtolower($dbtype) == 'pgsql') { $cfg->dbPG = false; $cfg->error = true; } if (!$cfg->error) { /* this line */
-
 	if (strtolower($dbtype) == 'mysql')
 	{
 		if (isset($cfg->DB_PORT))
@@ -106,8 +103,6 @@ if (strtolower($dbtype) == 'pgsql') { $cfg->dbPG = false; $cfg->error = true; } 
 
 		$cfg->dbNameCheck = true;
 	}
-
-} /* this line */
 
 	if (!$cfg->error && $dbtype == "mysql")
 	{
@@ -166,7 +161,7 @@ if (strtolower($dbtype) == 'pgsql') { $cfg->dbPG = false; $cfg->error = true; } 
 			if ($dbtype == "mysql")
 				$pdo->query("USE ".$cfg->DB_NAME);
 
-			$queries = explode(";", $dbData);
+/*			$queries = explode(";", $dbData);
 			$queries = array_map("trim", $queries);
 			foreach($queries as $q)
 			{
@@ -192,6 +187,13 @@ if (strtolower($dbtype) == 'pgsql') { $cfg->dbPG = false; $cfg->error = true; } 
 					}
 				}
 			}
+*/
+			try	{
+				$pdo->exec($dbData);
+			} catch (PDOException $err){
+				printf("Error inserting: (".$err->getMessage().")");
+				exit();
+			}
 
 			// Check one of the standard tables was created and has data.
 			$dbInstallWorked = false;
@@ -216,6 +218,8 @@ if (strtolower($dbtype) == 'pgsql') { $cfg->dbPG = false; $cfg->error = true; } 
 			if ($dbInstallWorked)
 			{
 				header("Location: ?success");
+                if (file_exists($cfg->DB_DIR.'/post_install.php'))
+					exec("php ".$cfg->DB_DIR."/post_install.php ${pdo}");
 				die();
 			}
 			else
