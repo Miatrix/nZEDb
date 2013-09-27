@@ -1,8 +1,8 @@
 <?php
 
-require_once(WWW_DIR."/lib/framework/db.php");
-require_once(WWW_DIR."/lib/groups.php");
-require_once(WWW_DIR."/lib/site.php");
+require_once(WWW_DIR.'lib/framework/db.php');
+require_once(WWW_DIR.'lib/groups.php');
+require_once(WWW_DIR.'lib/site.php');
 
 class Category
 {
@@ -155,13 +155,13 @@ class Category
 		$db = new DB();
 		$ret = array();
 
-		$exccatlist = "";
+		$exccatlist = '';
 		if (count($excludedcats) > 0)
-			$exccatlist = " AND id NOT IN (".implode(",", $excludedcats).")";
+			$exccatlist = ' AND id NOT IN ('.implode(',', $excludedcats).')';
 
-		$arr = $db->query(sprintf("SELECT * FROM category WHERE status = %d %s", Category::STATUS_ACTIVE, $exccatlist));
+		$arr = $db->query(sprintf('SELECT * FROM category WHERE status = %d %s', Category::STATUS_ACTIVE, $exccatlist));
 		foreach ($arr as $a)
-			if ($a["parentid"] == "")
+			if ($a['parentid'] == '')
 				$ret[] = $a;
 
 		foreach ($ret as $key => $parent)
@@ -170,17 +170,17 @@ class Category
 			$subcatnames = array();
 			foreach ($arr as $a)
 			{
-				if ($a["parentid"] == $parent["id"])
+				if ($a['parentid'] == $parent['id'])
 				{
 					$subcatlist[] = $a;
-					$subcatnames[] = $a["title"];
+					$subcatnames[] = $a['title'];
 				}
 			}
 
 			if (count($subcatlist) > 0)
 			{
 				array_multisort($subcatnames, SORT_ASC, $subcatlist);
-				$ret[$key]["subcatlist"] = $subcatlist;
+				$ret[$key]['subcatlist'] = $subcatlist;
 			}
 			else
 			{
@@ -610,7 +610,7 @@ class Category
 	//	TV.
 	public function isTV($releasename, $assumeTV=TRUE)
 	{
-		$looksLikeTV = preg_match('/\bS\d+\b(720|1080|Dvd|Blu)|s\d{1,3}[-._ ]?[ed]\d{1,3}(e\d{1,3}|[-.\w ])|[-._ ](\dx\d\d|C4TV|Complete[-._ ]Season|DSR|(D|H|P)DTV|EP[-._ ]?\d{1,3}|S\d{1,3}.+Extras|SUBPACK|Season[-._ ]\d{1,2}|WEB\-DL|WEBRip)([-._ ]|$)|TV[-._ ](19|20)\d\d|TrollHD|\bS\d+(\s|\b)?D\d+\b/i', $releasename);
+		$looksLikeTV = preg_match('/\bS\d+[-._ ](720|1080|Dvd|Blu)|s\d{1,3}[-._ ]?[ed]\d{1,3}(e\d{1,3}|[-.\w ])|[-._ ](\dx\d\d|C4TV|Complete[-._ ]Season|DSR|(D|H|P)DTV|EP[-._ ]?\d{1,3}|S\d{1,3}.+Extras|SUBPACK|Season[-._ ]\d{1,2}|WEB\-DL|WEBRip)([-._ ]|$)|TV[-._ ](19|20)\d\d|TrollHD|\bS\d+(\s|\b)?D\d+\b/i', $releasename);
 		$looksLikeSportTV = preg_match('/[-._ ]((19|20)\d\d[-._ ]\d{1,2}[-._ ]\d{1,2}[-._ ]VHSRip|Indy[-._ ]?Car|(iMPACT|Smoky[-._ ]Mountain|Texas)[-._ ]Wrestling|Moto[-._ ]?GP|NSCS[-._ ]ROUND|NECW[-._ ]TV|(Per|Post)\-Show|PPV|WrestleMania|WCW|WEB[-._ ]HD|WWE[-._ ](Monday|NXT|RAW|Smackdown|Superstars|WrestleMania))[-._ ]/i', $releasename);
 		if ($looksLikeTV && !preg_match('/[-._ ](flac|imageset|mp3|xxx)[-._ ]|[ .]exe$/i', $releasename))
 		{

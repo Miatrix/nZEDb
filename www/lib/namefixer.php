@@ -1,39 +1,45 @@
 <?php
-
-require_once(WWW_DIR."lib/framework/db.php");
-require_once(WWW_DIR."lib/category.php");
-require_once(WWW_DIR."lib/groups.php");
-require_once(WWW_DIR."lib/namecleaning.php");
-require_once(WWW_DIR."lib/nzbcontents.php");
-
-/* Values of relnamestatus:
- * 0  : New release, just inserted into the table.
- * 1  : Categorized release.
- * 								Previously (see 8,9,10): 2 : Fixed with namefixer.
- * 3  : Fixed with post proc (from mp3 tags or music.php).
- * 4  : Fixed with misc_sorter.
- * 5  : Fixed with decrypt hashes.
- * 6  : Matched properly in namecleaning.php's releaseCleaner function.
- * 7  : Fixed with PAR2.
- * 8  : Fixed with namefixer NFO.
- * 9  : Fixed with namefixer Files.
- * 10 : Fixed with namefixer preDB.
- * 11 : Fixed with predb.php
- * 12 : Fixed with requestID.
- * 20 : The release was checked by namefixer nfo but no name was found
- * 21 : The release was checked by namefixer filename but no name was found
- * 22 : The release was checked by namefixer par2 but no name was found
- */
+require_once(WWW_DIR.'lib/framework/db.php');
+require_once(WWW_DIR.'lib/category.php');
+require_once(WWW_DIR.'lib/groups.php');
+require_once(WWW_DIR.'lib/namecleaning.php');
+require_once(WWW_DIR.'lib/nzbcontents.php');
 
 class Namefixer
 {
+	// TODO: replace all queries using numbers to these constants.
+	const NF_NEW = 0;				// New release, just inserted into the table.
+	const NF_CATEGORIZED = 1;		// Categorized release.
+										// Previously 2 (now split into 8,9,10) : Fixed with namefixer.
+	const NF_POST_PROC = 3;			// Fixed with post proc (from mp3 tags or music.php).
+	const NF_MISC_SORTER = 4;		// Fixed with misc_sorter.
+	const NF_DECRYPT_HASHES = 5;	// Fixed with decrypt hashes.
+	const NF_NAMECLEANING = 6;		// Matched properly in namecleaning.php.
+	const NF_PAR2 = 7;				// Fixed with PAR2.
+	const NF_NF_NFO = 8;			// Fixed with namefixer NFO.
+	const NF_NF_FILES = 9;			// Fixed with namefixer Files.
+	const NF_NF_PREDB = 10;			// Fixed with namefixer preDB.
+	const NF_PREDB = 11;			// Fixed with predb.php
+	const NF_REQUID = 12;			// Fixed with requestID.
+	const NF_NF_NFO_F = 20;			// Checked by namefixer nfo but no name was found.
+	const NF_NFO_FILES_F = 21;		// Checked by namefixer filename but no name was found.
+	const NF_NF_PAR2_F = 22;		// Checked by namefixer par2 but no name was found.
 
 	function Namefixer($echooutput=true)
 	{
 		$this->echooutput = $echooutput;
 		$this->relid = $this->fixed = $this->checked = 0;
-		$this->timeother = " AND rel.adddate > (NOW() - INTERVAL 6 HOUR) AND rel.categoryid IN (1090, 2020, 3050, 6050, 5050, 7010, 8050) GROUP BY rel.id ORDER BY postdate DESC";
-		$this->timeall = " AND rel.adddate > (NOW() - INTERVAL 6 hour) GROUP BY rel.id ORDER BY postdate DESC";
+		$db = new DB;
+		if ($db->dbSystem() == 'mysql')
+		{
+			$this->timeother = " AND rel.adddate > (NOW() - INTERVAL 6 HOUR) AND rel.categoryid IN (1090, 2020, 3050, 6050, 5050, 7010, 8050) GROUP BY rel.id ORDER BY postdate DESC";
+			$this->timeall = " AND rel.adddate > (NOW() - INTERVAL 6 HOUR) GROUP BY rel.id ORDER BY postdate DESC";
+		}
+		else if ($db->dbSystem() == 'pgsql')
+		{
+			$this->timeother = " AND rel.adddate > (NOW() - INTERVAL '6 HOURS') AND rel.categoryid IN (1090, 2020, 3050, 6050, 5050, 7010, 8050) GROUP BY rel.id ORDER BY postdate DESC";
+			$this->timeall = " AND rel.adddate > (NOW() - INTERVAL '6 HOURS') GROUP BY rel.id ORDER BY postdate DESC";
+		}
 		$this->fullother = " AND rel.categoryid IN (1090, 2020, 3050, 6050, 5050, 7010, 8050) GROUP BY rel.id ORDER BY postdate DESC";
 		$this->fullall = " ORDER BY postdate DESC";
 		$this->done = $this->matched = false;
@@ -162,7 +168,7 @@ class Namefixer
 
 		$db = new DB();
 		$type = "Filenames, ";
-		$query = "SELECT id AS releaseid, guid, groupid FROM releases WHERE categoryid = 7010 AND relnamestatus IN (0, 1, 20, 21)";
+		$query = "SELECT rel.id AS releaseid, rel.guid, rel.groupid FROM releases rel WHERE rel.categoryid = 7010 AND rel.relnamestatus IN (0, 1, 20, 21)";
 
 		//24 hours, other cats
 		if ($time == 1 && $cats == 1)
@@ -179,12 +185,17 @@ class Namefixer
 
 		if (count($relres) > 0)
 		{
+			$db = new DB();
+			$nzbcontents = new NZBcontents($this->echooutput);
+			$pp = new Postprocess($this->echooutput);
 			foreach ($relres as $relrow)
 			{
-				$nzbcontents = new NZBcontents();
-				$nzbcontents->checkPAR2($relrow['guid'], $relrow['releaseid'], $relrow['groupid'], true);
+				if ($nzbcontents->checkPAR2($relrow['guid'], $relrow['releaseid'], $relrow['groupid'], $db, $pp) === true)
+				{
+					echo ".";
+					$this->fixed++;
+				}
 				$this->checked++;
-				echo ".";
 				if ($this->checked % 500 == 0)
 					echo $this->checked." files processed.\n\n";
 			}

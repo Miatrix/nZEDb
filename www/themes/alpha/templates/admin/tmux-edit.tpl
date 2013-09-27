@@ -38,7 +38,8 @@
 				<td>
 					<input id="MONITOR_DELAY" name="MONITOR_DELAY" class="tiny" type="text" value="{$ftmux->MONITOR_DELAY}" />
 					<div class="hint">The time between query refreshes of monitor information, in seconds. This has no effect on any other pane, except in regards to the kill switches. The other panes are checked every 10 seconds. The lower the number, the more often it queries the database for numbers.<br />
-					<b>As the database gets larger in size, the longer this set of queries takes to process.</b> I recommend that you set the sleep timer to at least 5 minutes, if any number in postprocess or total releases exceeds 1 million.</div>
+					<b>As the database gets larger in size, the longer this set of queries takes to process.</b><br />
+					this has been mitigated by using memcache on the count queries. The will stay in cache for whatever you have set in config.ini, default is 900 seconds.</div>
 				</td>
 			</tr>
 
@@ -75,7 +76,7 @@
 					The 'In Process' predb is the total unmatched predb and inside the parenthesis is number changed since the script started. The 'In Database' is the total matched predb's you have and the number inside the parenthesis is the percentage of total releases that you have matched to a predb release.<br /><br />
 					The 'In Process' NZBs are total nzbs, inside the parenthesis is distinct nzbs and 'In Database' are nzbs that have all parts available and will be processed on next run.<br /><br />
 					The 'In Process' requestID is the number waiting to be processed and inside the parenthesis is the number changed since the script started. The 'In Database' is the total matches of releases to requestIDs and inside the parenthesis is percentage of total releases that you have matched to a requestID.<br /><br />
-					The 'In Process' rows PC and Pron are simply subsets of the 'In Process' row Misc. There is no postprocessing specifically for these categories. The 'In Database' is the actual count for the catagory.
+					The 'In Process' rows PC and Pron are simply subsets of the 'In Process' row Misc. There is no postprocessing specifically for these categories. The 'In Database' is the actual count for the category.
 				</div>
 			</td>
 		</tr>
@@ -89,7 +90,7 @@
 				<td><label for="SEQUENTIAL">Run Sequential:</label></td>
 				<td>
 					{html_options class="siteeditstyle" id="SEQUENTIAL" name='SEQUENTIAL' values=$sequential_ids output=$sequential_names selected=$ftmux->SEQUENTIAL}
-					<div class="hint">Basic Sequential runs update_binaries, backfill and update releases_sequentially.<br />Complete Sequential runs threaded.sh(copied to user_threaded.sh), this still runs import in its own pane. This will alow you to reoder the script in any order you like. The idea is to get each individual script to run at or near your desired load level.<br />Changing requires restart.</div>
+					<div class="hint">Basic Sequential runs update_binaries, backfill and update releases_sequentially.<br />Complete Sequential runs threaded.sh(copied to user_threaded.sh), this still runs import in its own pane. This will allow you to reorder the script in any order you like. The idea is to get each individual script to run at or near your desired load level.<br />Changing requires restart.</div>
 				</td>
 			</tr>
 
@@ -275,7 +276,7 @@
 				<td style="width:160px;"><label for="POST_KILL_TIMER">Postprocess Kill Timer:</label></td>
 				<td>
 					<input id="POST_KILL_TIMER" name="POST_KILL_TIMER" class="tiny" type="text" value="{$ftmux->POST_KILL_TIMER}" />
-					<div class="hint">The time postprocess is allowed to run with no updates to the screen. Activity is detected when the history for the pane changes. The clock is restarted everytime activity is detected.</div>
+					<div class="hint">The time postprocess is allowed to run with no updates to the screen. Activity is detected when the history for the pane changes. The clock is restarted every time activity is detected.</div>
 				</td>
 			</tr>
 
@@ -394,7 +395,7 @@
 			</tr>
 
 			<tr>
-				<td style="width:160px;"><label for="DEHASH_TIMER">Decryt Hashes Sleep Timer:</label></td>
+				<td style="width:160px;"><label for="DEHASH_TIMER">Decrypt Hashes Sleep Timer:</label></td>
 				<td>
 					<input id="DEHASH_TIMER" name="DEHASH_TIMER" class="tiny" type="text" value="{$ftmux->DEHASH_TIMER}" />
 					<div class="hint">The time to sleep from the time the loop ends until it is restarted, in seconds.</div>
@@ -479,6 +480,14 @@
 <fieldset>
 	<legend>Server Monitors</legend>
 		<table class="input">
+			<tr>
+				<td style="width:160px;"><label for="SHOWQUERY">Display Query Times:</label></td>
+				<td>
+					{html_radios id="SHOWQUERY" name='SHOWQUERY' values=$truefalse_names output=$truefalse_names selected=$ftmux->SHOWQUERY separator='<br />'}
+					<div class="hint">Choose to display the query times for each set of queries. true/false.</div>
+				</td>
+			</tr>
+
 			<tr>
 				<td style="width:160px;"><label for="HTOP">htop:</label></td>
 				<td>
